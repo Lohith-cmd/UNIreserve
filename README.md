@@ -28,6 +28,15 @@ docker compose exec db psql -U unireserve -d unireserve
 
 Init scripts only run on an empty volume. To rebuild after editing SQL: `docker compose down -v && docker compose up -d db`.
 
+## Run the tests
+
+`db/tests.sql` checks every trigger, function and constraint, prints PASS/FAIL per case, and rolls
+everything back. Run it on a freshly seeded database (PowerShell):
+
+```powershell
+Get-Content db/tests.sql -Raw | docker compose exec -T db psql -U unireserve -d unireserve
+```
+
 ## Design decisions (settled in team discussion)
 
 - Superclass table is `Users`, because `User` is a reserved word in PostgreSQL.
