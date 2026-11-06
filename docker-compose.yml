@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-unireserve}
+      POSTGRES_USER: ${POSTGRES_USER:-unireserve}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-unireserve}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Init scripts run once, in filename order, on first start of an empty volume.
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./db/procedures.sql:/docker-entrypoint-initdb.d/02_procedures.sql:ro
+      - ./db/triggers.sql:/docker-entrypoint-initdb.d/03_triggers.sql:ro
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/04_seed.sql:ro
+
+  # Enable these once backend/ and frontend/ have Dockerfiles.
+  # api:
+  #   build: ./backend
+  #   env_file: .env
+  #   depends_on: [db]
+  #   ports: ["8000:8000"]
+  # web:
+  #   build: ./frontend
+  #   depends_on: [api]
+  #   ports: ["5173:5173"]
+
+volumes:
+  pgdata:
