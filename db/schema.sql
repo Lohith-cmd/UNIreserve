@@ -3,6 +3,17 @@
 -- Run order: schema.sql -> procedures.sql -> triggers.sql -> seed.sql
 
 -- ---------------------------------------------------------------
+-- Drop guards (development only: lets this file be re-run cleanly).
+-- WARNING: destroys all data. After re-running, also re-run procedures.sql,
+-- triggers.sql and seed.sql (dropping the tables removes their triggers).
+-- ---------------------------------------------------------------
+DROP VIEW  IF EXISTS booking_summary_view, facility_availability_view;
+DROP TABLE IF EXISTS BookingStatusLog, Booking, MaintenanceSchedule, Holiday,
+                     Classroom, SportsVenue, Facility,
+                     Admin, Faculty, Student, Users CASCADE;
+DROP TYPE  IF EXISTS booking_status, indoor_outdoor, facility_status, facility_type, user_role CASCADE;
+
+-- ---------------------------------------------------------------
 -- Enumerated types
 -- ---------------------------------------------------------------
 CREATE TYPE user_role       AS ENUM ('Student', 'Faculty', 'Admin');
@@ -126,6 +137,8 @@ CREATE TABLE BookingStatusLog (
 -- ---------------------------------------------------------------
 -- Composite index for availability / range lookups (WF1, WF3)
 CREATE INDEX idx_booking_facility_date_start ON Booking (FacilityID, BookingDate, StartTime);
+-- Filter by status (admin queues, analytics)
+CREATE INDEX idx_booking_status ON Booking (Status);
 -- "My bookings" lookups (WF4)
 CREATE INDEX idx_booking_user_date ON Booking (UserID, BookingDate);
 -- Admin pending queue (WF2)

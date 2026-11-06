@@ -4,6 +4,13 @@
 --   SELECT set_config('app.current_user_id', '<acting user id>', true);
 -- so the audit log records who made the change (NULL if unset).
 
+-- Drop guards so this file can be re-run on its own during development.
+DROP TRIGGER IF EXISTS trg_booking_duration               ON Booking;
+DROP TRIGGER IF EXISTS trg_booking_classroom_availability ON Booking;
+DROP TRIGGER IF EXISTS trg_booking_advance_window         ON Booking;
+DROP TRIGGER IF EXISTS trg_booking_auto_reject            ON Booking;
+DROP TRIGGER IF EXISTS trg_booking_audit_log              ON Booking;
+
 -- ===============================================================
 -- 1. BEFORE INSERT: duration limits
 --    Student: max 1h any facility. Faculty: max 1h sports, 3h classroom.
