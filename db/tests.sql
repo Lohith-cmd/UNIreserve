@@ -9,11 +9,11 @@ BEGIN;
 
 CREATE TEMP TABLE t_results (label TEXT, passed BOOLEAN);
 CREATE TEMP TABLE t_dates AS
-SELECT (SELECT MIN(d)::date FROM generate_series(CURRENT_DATE + 1, CURRENT_DATE + 6) d
+SELECT (SELECT MIN(d)::date FROM generate_series(CURRENT_DATE + 1, CURRENT_DATE + 6, INTERVAL '1 day') d
          WHERE EXTRACT(DOW FROM d) BETWEEN 1 AND 5) AS wd,    -- a weekday
-       (SELECT MIN(d)::date FROM generate_series(CURRENT_DATE + 1, CURRENT_DATE + 6) d
+       (SELECT MIN(d)::date FROM generate_series(CURRENT_DATE + 1, CURRENT_DATE + 6, INTERVAL '1 day') d
          WHERE EXTRACT(DOW FROM d) IN (0, 6))        AS we,    -- a weekend day
-       (SELECT MAX(d)::date FROM generate_series(CURRENT_DATE + 1, CURRENT_DATE + 6) d
+       (SELECT MAX(d)::date FROM generate_series(CURRENT_DATE + 1, CURRENT_DATE + 6, INTERVAL '1 day') d
          WHERE EXTRACT(DOW FROM d) BETWEEN 1 AND 5) AS hol;    -- another weekday, made a holiday below
 
 INSERT INTO Holiday (HolidayDate, Description) SELECT hol, 'test holiday' FROM t_dates
