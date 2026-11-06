@@ -53,15 +53,6 @@ Get-Content db/tests.sql -Raw | docker compose exec -T db psql -U unireserve -d 
 - Auto-reject uses time overlap (stricter than the exact-slot match in the midsem report).
 - Audit log actor comes from `set_config('app.current_user_id', ...)`, set by the backend per transaction.
 
-## Work split and order
-
-| Task | Owner | Depends on |
-|---|---|---|
-| `schema.sql` review/extend, constraints | Lohith, Sambhav | none |
-| `procedures.sql`, `triggers.sql`, SQL tests | Aditya | schema |
-| `seed.sql` (>= 500 rows) | Sambhav | schema, triggers |
-| Backend: auth, facilities, bookings, admin | Gowtham | schema |
-| Frontend + docker-compose integration | Aniya | API contract |
 
 ## Git workflow
 
