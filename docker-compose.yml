@@ -15,12 +15,15 @@ services:
       - ./db/triggers.sql:/docker-entrypoint-initdb.d/03_triggers.sql:ro
       - ./db/seed.sql:/docker-entrypoint-initdb.d/04_seed.sql:ro
 
-  # Enable these once backend/ and frontend/ have Dockerfiles.
-  # api:
-  #   build: ./backend
-  #   env_file: .env
-  #   depends_on: [db]
-  #   ports: ["8000:8000"]
+  api:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-unireserve}:${POSTGRES_PASSWORD:-unireserve}@db:5432/${POSTGRES_DB:-unireserve}
+    depends_on: [db]
+    ports: ["8000:8000"]
+
+  # Enable once frontend/ has Dockerfile.
   # web:
   #   build: ./frontend
   #   depends_on: [api]
