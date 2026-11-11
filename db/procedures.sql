@@ -53,7 +53,7 @@ $$;
 -- Runs inside the caller's transaction. The status-change audit row is written
 -- by trg_booking_audit_log, which picks up the acting user from app.current_user_id.
 -- ---------------------------------------------------------------
-CREATE OR REPLACE FUNCTION cancel_booking(p_booking_id INT, p_user_id INT)
+CREATE OR REPLACE FUNCTION cancel_booking(p_booking_id INT, p_user_id BIGINT)
 RETURNS VOID
 LANGUAGE plpgsql AS $$
 DECLARE

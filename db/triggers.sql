@@ -13,7 +13,7 @@ DROP TRIGGER IF EXISTS trg_booking_audit_log              ON Booking;
 
 -- ===============================================================
 -- 1. BEFORE INSERT: duration limits
---    Student: max 1h any facility. Faculty: max 1h sports, 3h classroom.
+--    Student: max 1h any facility. Faculty: max 1h sports, 3h classroom or other.
 --    Admin: no cap. Minimum for everyone: 30 min.
 -- ===============================================================
 CREATE OR REPLACE FUNCTION fn_booking_duration() RETURNS TRIGGER
@@ -35,7 +35,7 @@ BEGIN
     ELSIF v_role = 'Faculty' THEN
         IF v_type = 'Sports'    AND v_mins > 60  THEN
             RAISE EXCEPTION 'Faculty may book a sports venue for at most 1 hour';
-        ELSIF v_type = 'Classroom' AND v_mins > 180 THEN
+        ELSIF v_type IN ('Classroom', 'Other') AND v_mins > 180 THEN
             RAISE EXCEPTION 'Faculty may book a classroom for at most 3 hours';
         END IF;
     END IF;
@@ -50,7 +50,8 @@ FOR EACH ROW EXECUTE FUNCTION fn_booking_duration();
 -- ===============================================================
 -- 2. BEFORE INSERT: facility availability
 --    Maintenance blocks booking; classroom window rule via
---    check_classroom_availability(); sports venues open 06:00-22:00.
+--    check_classroom_availability(); sports venues open 06:00-22:00;
+--    other venues open 08:00-22:00.
 -- ===============================================================
 CREATE OR REPLACE FUNCTION fn_booking_availability() RETURNS TRIGGER
 LANGUAGE plpgsql AS $$
@@ -70,6 +71,10 @@ BEGIN
 
     IF v_type = 'Sports' AND (NEW.StartTime < TIME '06:00' OR NEW.EndTime > TIME '22:00') THEN
         RAISE EXCEPTION 'Sports venues can only be booked between 06:00 and 22:00';
+    END IF;
+
+    IF v_type = 'Other' AND (NEW.StartTime < TIME '08:00' OR NEW.EndTime > TIME '22:00') THEN
+        RAISE EXCEPTION 'Other venues can only be booked between 08:00 and 22:00';
     END IF;
     RETURN NEW;
 END;
@@ -163,7 +168,7 @@ EXECUTE FUNCTION fn_booking_auto_reject();
 CREATE OR REPLACE FUNCTION fn_booking_audit_log() RETURNS TRIGGER
 LANGUAGE plpgsql AS $$
 DECLARE
-    v_actor INT := NULLIF(current_setting('app.current_user_id', true), '')::INT;
+    v_actor BIGINT := NULLIF(current_setting('app.current_user_id', true), '')::BIGINT;
 BEGIN
     IF TG_OP = 'INSERT' THEN
         INSERT INTO BookingStatusLog (BookingID, OldStatus, NewStatus, ChangedByUserID)

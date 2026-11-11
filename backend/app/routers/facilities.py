@@ -14,11 +14,17 @@ def list_facilities(facility_type: Optional[str] = None, status: Optional[str] =
     with get_db_cursor(commit=False) as cur:
         query = """
             SELECT f.FacilityID, f.Name, f.Location, f.FacilityType, f.Status,
-                   s.VenueType, s.Surface, s.IndoorOutdoor,
-                   c.BuildingName, c.RoomNumber, c.Capacity, c.HasProjector, c.HasAC, c.RoomType
+                   s.VenueType, s.Surface,
+                   c.BuildingName, c.RoomNumber, c.RoomType,
+                   o.VenueCategory,
+                   COALESCE(c.Capacity,     o.Capacity)     AS Capacity,
+                   COALESCE(c.HasProjector, o.HasProjector) AS HasProjector,
+                   COALESCE(c.HasAC,        o.HasAC)        AS HasAC,
+                   COALESCE(s.IndoorOutdoor, o.IndoorOutdoor) AS IndoorOutdoor
             FROM Facility f
             LEFT JOIN SportsVenue s ON s.FacilityID = f.FacilityID
             LEFT JOIN Classroom c ON c.FacilityID = f.FacilityID
+            LEFT JOIN OtherFacility o ON o.FacilityID = f.FacilityID
             WHERE 1=1
         """
         params = []
