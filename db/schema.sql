@@ -9,7 +9,7 @@
 -- ---------------------------------------------------------------
 DROP VIEW  IF EXISTS booking_summary_view, facility_availability_view;
 DROP TABLE IF EXISTS BookingStatusLog, Booking, MaintenanceSchedule, Holiday,
-                     Classroom, SportsVenue, Facility,
+                     OtherFacility, Classroom, SportsVenue, Facility,
                      Admin, Faculty, Student, Users CASCADE;
 DROP TYPE  IF EXISTS booking_status, indoor_outdoor, facility_status, facility_type, user_role CASCADE;
 
@@ -17,7 +17,7 @@ DROP TYPE  IF EXISTS booking_status, indoor_outdoor, facility_status, facility_t
 -- Enumerated types
 -- ---------------------------------------------------------------
 CREATE TYPE user_role       AS ENUM ('Student', 'Faculty', 'Admin');
-CREATE TYPE facility_type   AS ENUM ('Sports', 'Classroom');
+CREATE TYPE facility_type   AS ENUM ('Sports', 'Classroom', 'Other');
 CREATE TYPE facility_status AS ENUM ('Active', 'Under Maintenance');
 CREATE TYPE indoor_outdoor  AS ENUM ('Indoor', 'Outdoor');
 CREATE TYPE booking_status  AS ENUM ('Pending', 'Confirmed', 'Rejected', 'Cancelled', 'Completed');
@@ -27,7 +27,7 @@ CREATE TYPE booking_status  AS ENUM ('Pending', 'Confirmed', 'Rejected', 'Cancel
 -- "User" is a reserved word in PostgreSQL, so the superclass table is Users.
 -- ---------------------------------------------------------------
 CREATE TABLE Users (
-    UserID       SERIAL PRIMARY KEY,
+    UserID       BIGSERIAL PRIMARY KEY,
     Name         VARCHAR(100) NOT NULL,
     Email        VARCHAR(150) NOT NULL UNIQUE,
     PasswordHash VARCHAR(255) NOT NULL,
@@ -37,21 +37,21 @@ CREATE TABLE Users (
 );
 
 CREATE TABLE Student (
-    UserID     INT PRIMARY KEY REFERENCES Users(UserID) ON DELETE CASCADE,
+    UserID     BIGINT PRIMARY KEY REFERENCES Users(UserID) ON DELETE CASCADE,
     BITS_ID    VARCHAR(13) NOT NULL UNIQUE,
     Department VARCHAR(100),
-    Year       INT NOT NULL CHECK (Year BETWEEN 1 AND 5)
+    Year       INT NOT NULL CHECK (Year BETWEEN 2020 AND 2024)
 );
 
 CREATE TABLE Faculty (
-    UserID      INT PRIMARY KEY REFERENCES Users(UserID) ON DELETE CASCADE,
+    UserID      BIGINT PRIMARY KEY REFERENCES Users(UserID) ON DELETE CASCADE,
     EmployeeID  VARCHAR(20) NOT NULL UNIQUE,
     Department  VARCHAR(100),
     Designation VARCHAR(100)
 );
 
 CREATE TABLE Admin (
-    UserID     INT PRIMARY KEY REFERENCES Users(UserID) ON DELETE CASCADE,
+    UserID     BIGINT PRIMARY KEY REFERENCES Users(UserID) ON DELETE CASCADE,
     AdminLevel VARCHAR(50)
 );
 
@@ -83,13 +83,22 @@ CREATE TABLE Classroom (
     RoomType     VARCHAR(50)
 );
 
+CREATE TABLE OtherFacility (
+    FacilityID    INT PRIMARY KEY REFERENCES Facility(FacilityID) ON DELETE CASCADE,
+    VenueCategory VARCHAR(50) NOT NULL,
+    Capacity      INT NOT NULL CHECK (Capacity > 0),
+    HasProjector  BOOLEAN NOT NULL DEFAULT FALSE,
+    HasAC         BOOLEAN NOT NULL DEFAULT FALSE,
+    IndoorOutdoor indoor_outdoor NOT NULL
+);
+
 -- ---------------------------------------------------------------
 -- Booking (core transactional table)
 -- Slots are 30-minute increments (assumption in report section 6).
 -- ---------------------------------------------------------------
 CREATE TABLE Booking (
     BookingID  SERIAL PRIMARY KEY,
-    UserID     INT NOT NULL REFERENCES Users(UserID)       ON DELETE RESTRICT,
+    UserID     BIGINT NOT NULL REFERENCES Users(UserID)       ON DELETE RESTRICT,
     FacilityID INT NOT NULL REFERENCES Facility(FacilityID) ON DELETE RESTRICT,
     BookingDate DATE NOT NULL,
     StartTime   TIME NOT NULL,
@@ -127,7 +136,7 @@ CREATE TABLE BookingStatusLog (
     BookingID       INT NOT NULL REFERENCES Booking(BookingID) ON DELETE CASCADE,
     OldStatus       VARCHAR(20),
     NewStatus       VARCHAR(20) NOT NULL,
-    ChangedByUserID INT REFERENCES Users(UserID) ON DELETE SET NULL,
+    ChangedByUserID BIGINT REFERENCES Users(UserID) ON DELETE SET NULL,
     ChangedAt       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -2,8 +2,9 @@
 -- Run against a freshly seeded database (see README). Everything runs inside one
 -- transaction that is rolled back at the end, so no data is changed.
 -- Dates are computed relative to today so the tests do not go stale.
--- Seed assumptions: users 2,3 = Faculty; 4,5,6 = Student; facilities 1,2 = Sports (Active),
--- 3 = Sports (Under Maintenance), 4,5 = Classroom.
+-- Seed assumptions: users 2,3 = Faculty; 41120212331,41120212371,41120212446 = Student;
+-- facilities 2001,2002 = Sports (Active), 2003 = Sports (Under Maintenance),
+-- 1001,1002 = Classroom, and a temporary OtherFacility created inside the test transaction.
 
 BEGIN;
 
@@ -18,6 +19,22 @@ SELECT (SELECT MIN(d)::date FROM generate_series(CURRENT_DATE + 1, CURRENT_DATE 
 
 INSERT INTO Holiday (HolidayDate, Description) SELECT hol, 'test holiday' FROM t_dates
 ON CONFLICT DO NOTHING;
+UPDATE Facility SET Status = 'Under Maintenance' WHERE FacilityID = 2003;
+
+-- Seed an OtherFacility (Auditorium) for trigger tests (facility 6).
+DO $$
+DECLARE fid INT;
+BEGIN
+    INSERT INTO Facility (Name, Location, FacilityType, Status)
+    VALUES ('Auditorium', 'SAC Building', 'Other', 'Active')
+    RETURNING FacilityID INTO fid;
+
+    INSERT INTO OtherFacility (FacilityID, VenueCategory, Capacity, HasProjector, HasAC, IndoorOutdoor)
+    VALUES (fid, 'Auditorium', 500, TRUE, TRUE, 'Indoor');
+
+    -- Store for later use via a session variable
+    PERFORM set_config('app.test_other_fid', fid::text, true);
+END $$;
 
 -- Runs sql; records PASS if it succeeded (should_pass) or failed (NOT should_pass).
 CREATE FUNCTION pg_temp.expect(p_label TEXT, p_sql TEXT, p_should_pass BOOLEAN) RETURNS VOID
@@ -33,62 +50,90 @@ BEGIN
     INSERT INTO t_results VALUES (p_label, ok);
 END $$;
 
-CREATE FUNCTION pg_temp.ins(p_user INT, p_fac INT, p_date TEXT, p_start TEXT, p_end TEXT) RETURNS TEXT
+CREATE FUNCTION pg_temp.ins(p_user BIGINT, p_fac INT, p_date TEXT, p_start TEXT, p_end TEXT) RETURNS TEXT
 LANGUAGE sql AS $$
     SELECT format('INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (%s, %s, %s, %L, %L)',
                   p_user, p_fac, p_date, p_start, p_end);
 $$;
 
 -- ---------- Trigger 1: duration limits ----------
-SELECT pg_temp.expect('T1 student 2h sports rejected',        pg_temp.ins(4,1,'(SELECT we FROM t_dates)','10:00','12:00'), false);
-SELECT pg_temp.expect('T1 student 1h sports accepted',        pg_temp.ins(4,1,'(SELECT we FROM t_dates)','10:00','11:00'), true);
-SELECT pg_temp.expect('T1 student 2h classroom rejected',     pg_temp.ins(4,4,'(SELECT we FROM t_dates)','09:00','11:00'), false);
-SELECT pg_temp.expect('T1 faculty 90min sports rejected',     pg_temp.ins(2,1,'(SELECT we FROM t_dates)','12:00','13:30'), false);
-SELECT pg_temp.expect('T1 faculty 3h classroom accepted',     pg_temp.ins(2,4,'(SELECT we FROM t_dates)','09:00','12:00'), true);
-SELECT pg_temp.expect('T1 faculty 3.5h classroom rejected',   pg_temp.ins(2,4,'(SELECT we FROM t_dates)','13:00','16:30'), false);
-SELECT pg_temp.expect('T1 30min minimum accepted',            pg_temp.ins(4,1,'(SELECT we FROM t_dates)','16:00','16:30'), true);
+SELECT pg_temp.expect('T1 student 2h sports rejected',        pg_temp.ins(41120212331,2001,'(SELECT we FROM t_dates)','10:00','12:00'), false);
+SELECT pg_temp.expect('T1 student 1h sports accepted',        pg_temp.ins(41120212331,2001,'(SELECT we FROM t_dates)','10:00','11:00'), true);
+SELECT pg_temp.expect('T1 student 2h classroom rejected',     pg_temp.ins(41120212331,1001,'(SELECT we FROM t_dates)','09:00','11:00'), false);
+SELECT pg_temp.expect('T1 faculty 90min sports rejected',     pg_temp.ins(2,2001,'(SELECT we FROM t_dates)','12:00','13:30'), false);
+SELECT pg_temp.expect('T1 faculty 3h classroom accepted',     pg_temp.ins(2,1001,'(SELECT we FROM t_dates)','09:00','12:00'), true);
+SELECT pg_temp.expect('T1 faculty 3.5h classroom rejected',   pg_temp.ins(2,1001,'(SELECT we FROM t_dates)','13:00','16:30'), false);
+SELECT pg_temp.expect('T1 30min minimum accepted',            pg_temp.ins(41120212331,2001,'(SELECT we FROM t_dates)','16:00','16:30'), true);
+
+-- OtherFacility (Auditorium) duration limits
+SELECT pg_temp.expect('T1 student 2h other rejected',
+    format('INSERT INTO Booking (UserID,FacilityID,BookingDate,StartTime,EndTime) VALUES (41120212331,%s,%L,''10:00'',''12:00'')',
+           current_setting('app.test_other_fid')::int, (SELECT we FROM t_dates)), false);
+SELECT pg_temp.expect('T1 student 1h other accepted',
+    format('INSERT INTO Booking (UserID,FacilityID,BookingDate,StartTime,EndTime) VALUES (41120212331,%s,%L,''10:00'',''11:00'')',
+           current_setting('app.test_other_fid')::int, (SELECT we FROM t_dates)), true);
+SELECT pg_temp.expect('T1 faculty 3h other accepted',
+    format('INSERT INTO Booking (UserID,FacilityID,BookingDate,StartTime,EndTime) VALUES (2,%s,%L,''14:00'',''17:00'')',
+           current_setting('app.test_other_fid')::int, (SELECT we FROM t_dates)), true);
+SELECT pg_temp.expect('T1 faculty 3.5h other rejected',
+    format('INSERT INTO Booking (UserID,FacilityID,BookingDate,StartTime,EndTime) VALUES (2,%s,%L,''14:00'',''17:30'')',
+           current_setting('app.test_other_fid')::int, (SELECT we FROM t_dates)), false);
 
 -- ---------- Trigger 2: availability ----------
-SELECT pg_temp.expect('T2 classroom weekday 10:00 rejected',  pg_temp.ins(2,4,'(SELECT wd FROM t_dates)','10:00','11:00'), false);
-SELECT pg_temp.expect('T2 classroom weekday 18:00 accepted',  pg_temp.ins(2,4,'(SELECT wd FROM t_dates)','18:00','19:00'), true);
-SELECT pg_temp.expect('T2 classroom weekday after 22:00 rejected', pg_temp.ins(2,5,'(SELECT wd FROM t_dates)','21:30','22:30'), false);
-SELECT pg_temp.expect('T2 classroom weekend 07:00 rejected',  pg_temp.ins(2,5,'(SELECT we FROM t_dates)','07:00','08:00'), false);
-SELECT pg_temp.expect('T2 classroom weekend 21:30-22:30 rejected', pg_temp.ins(2,5,'(SELECT we FROM t_dates)','21:30','22:30'), false);
-SELECT pg_temp.expect('T2 classroom holiday 10:00 accepted',  pg_temp.ins(2,5,'(SELECT hol FROM t_dates)','10:00','11:00'), true);
-SELECT pg_temp.expect('T2 sports before 06:00 rejected',      pg_temp.ins(4,2,'(SELECT wd FROM t_dates)','05:30','06:00'), false);
-SELECT pg_temp.expect('T2 sports after 22:00 rejected',       pg_temp.ins(4,2,'(SELECT wd FROM t_dates)','21:30','22:30'), false);
-SELECT pg_temp.expect('T2 facility Under Maintenance rejected', pg_temp.ins(4,3,'(SELECT wd FROM t_dates)','10:00','11:00'), false);
+SELECT pg_temp.expect('T2 classroom weekday 10:00 rejected',  pg_temp.ins(2,1001,'(SELECT wd FROM t_dates)','10:00','11:00'), false);
+SELECT pg_temp.expect('T2 classroom weekday 18:00 accepted',  pg_temp.ins(2,1001,'(SELECT wd FROM t_dates)','18:00','19:00'), true);
+SELECT pg_temp.expect('T2 classroom weekday after 22:00 rejected', pg_temp.ins(2,1002,'(SELECT wd FROM t_dates)','21:30','22:30'), false);
+SELECT pg_temp.expect('T2 classroom weekend 07:00 rejected',  pg_temp.ins(2,1002,'(SELECT we FROM t_dates)','07:00','08:00'), false);
+SELECT pg_temp.expect('T2 classroom weekend 21:30-22:30 rejected', pg_temp.ins(2,1002,'(SELECT we FROM t_dates)','21:30','22:30'), false);
+SELECT pg_temp.expect('T2 classroom holiday 10:00 accepted',  pg_temp.ins(2,1002,'(SELECT hol FROM t_dates)','10:00','11:00'), true);
+SELECT pg_temp.expect('T2 sports before 06:00 rejected',      pg_temp.ins(41120212331,2002,'(SELECT wd FROM t_dates)','05:30','06:00'), false);
+SELECT pg_temp.expect('T2 sports after 22:00 rejected',       pg_temp.ins(41120212331,2002,'(SELECT wd FROM t_dates)','21:30','22:30'), false);
+SELECT pg_temp.expect('T2 facility Under Maintenance rejected', pg_temp.ins(41120212331,2003,'(SELECT wd FROM t_dates)','10:00','11:00'), false);
 
 INSERT INTO MaintenanceSchedule (FacilityID, StartDate, EndDate, StartTime, EndTime, Description)
-SELECT 5, we, we, '10:00', '12:00', 'test window' FROM t_dates;
-SELECT pg_temp.expect('T2 overlaps maintenance window rejected', pg_temp.ins(2,5,'(SELECT we FROM t_dates)','10:30','11:30'), false);
-SELECT pg_temp.expect('T2 outside maintenance window accepted',  pg_temp.ins(2,5,'(SELECT we FROM t_dates)','14:00','15:00'), true);
+SELECT 1002, we, we, '10:00', '12:00', 'test window' FROM t_dates;
+SELECT pg_temp.expect('T2 overlaps maintenance window rejected', pg_temp.ins(2,1002,'(SELECT we FROM t_dates)','10:30','11:30'), false);
+SELECT pg_temp.expect('T2 outside maintenance window accepted',  pg_temp.ins(2,1002,'(SELECT we FROM t_dates)','14:00','15:00'), true);
+
+-- OtherFacility (Auditorium) operating hours 08:00-22:00
+SELECT pg_temp.expect('T2 other before 08:00 rejected',
+    format('INSERT INTO Booking (UserID,FacilityID,BookingDate,StartTime,EndTime) VALUES (41120212331,%s,%L,''07:30'',''08:00'')',
+           current_setting('app.test_other_fid')::int, (SELECT wd FROM t_dates)), false);
+SELECT pg_temp.expect('T2 other after 22:00 rejected',
+    format('INSERT INTO Booking (UserID,FacilityID,BookingDate,StartTime,EndTime) VALUES (41120212331,%s,%L,''21:30'',''22:30'')',
+           current_setting('app.test_other_fid')::int, (SELECT wd FROM t_dates)), false);
+SELECT pg_temp.expect('T2 other within hours accepted',
+    format('INSERT INTO Booking (UserID,FacilityID,BookingDate,StartTime,EndTime) VALUES (41120212331,%s,%L,''09:00'',''10:00'')',
+           current_setting('app.test_other_fid')::int, (SELECT wd FROM t_dates)), true);
 
 -- ---------- Trigger 3: advance-booking window ----------
-SELECT pg_temp.expect('T3 student 7 days ahead accepted',  pg_temp.ins(5,2,'CURRENT_DATE + 7','10:00','11:00'), true);
-SELECT pg_temp.expect('T3 student 8 days ahead rejected',  pg_temp.ins(5,2,'CURRENT_DATE + 8','10:00','11:00'), false);
-SELECT pg_temp.expect('T3 faculty 14 days ahead accepted', pg_temp.ins(3,2,'CURRENT_DATE + 14','10:00','11:00'), true);
-SELECT pg_temp.expect('T3 faculty 15 days ahead rejected', pg_temp.ins(3,2,'CURRENT_DATE + 15','10:00','11:00'), false);
-SELECT pg_temp.expect('T3 past date rejected',             pg_temp.ins(5,2,'CURRENT_DATE - 1','10:00','11:00'), false);
+SELECT pg_temp.expect('T3 student 7 days ahead accepted',  pg_temp.ins(41120212371,2002,'CURRENT_DATE + 7','10:00','11:00'), true);
+SELECT pg_temp.expect('T3 student 8 days ahead rejected',  pg_temp.ins(41120212371,2002,'CURRENT_DATE + 8','10:00','11:00'), false);
+SELECT pg_temp.expect('T3 faculty 14 days ahead accepted', pg_temp.ins(3,2002,'CURRENT_DATE + 14','10:00','11:00'), true);
+SELECT pg_temp.expect('T3 faculty 15 days ahead rejected', pg_temp.ins(3,2002,'CURRENT_DATE + 15','10:00','11:00'), false);
+SELECT pg_temp.expect('T3 past date rejected',             pg_temp.ins(41120212371,2002,'CURRENT_DATE - 1','10:00','11:00'), false);
 
 -- ---------- CHECK / UNIQUE constraints ----------
-SELECT pg_temp.expect('C end = start rejected',       pg_temp.ins(5,2,'CURRENT_DATE + 2','10:00','10:00'), false);
-SELECT pg_temp.expect('C off 30-min grid rejected',   pg_temp.ins(5,2,'CURRENT_DATE + 2','10:15','11:00'), false);
+SELECT pg_temp.expect('C end = start rejected',       pg_temp.ins(41120212371,2002,'CURRENT_DATE + 2','10:00','10:00'), false);
+SELECT pg_temp.expect('C off 30-min grid rejected',   pg_temp.ins(41120212371,2002,'CURRENT_DATE + 2','10:15','11:00'), false);
 SELECT pg_temp.expect('C duplicate email rejected',
     $q$INSERT INTO Users (Name, Email, PasswordHash, Role) VALUES ('Dup', 'admin1@hyderabad.bits-pilani.ac.in', 'x', 'Student')$q$, false);
-SELECT pg_temp.expect('C student year 6 rejected',
-    $q$WITH u AS (INSERT INTO Users (Name, Email, PasswordHash, Role) VALUES ('T', 'ty6@x.com', 'x', 'Student') RETURNING UserID)
-       INSERT INTO Student SELECT UserID, 'TESTID00000X1', 'CSIS', 6 FROM u$q$, false);
-SELECT pg_temp.expect('C student year 3 accepted',
-    $q$WITH u AS (INSERT INTO Users (Name, Email, PasswordHash, Role) VALUES ('T', 'ty3@x.com', 'x', 'Student') RETURNING UserID)
-       INSERT INTO Student SELECT UserID, 'TESTID00000X2', 'CSIS', 3 FROM u$q$, true);
+SELECT pg_temp.expect('C student year 2018 rejected',
+    $q$WITH u AS (INSERT INTO Users (Name, Email, PasswordHash, Role) VALUES ('T', 'ty2018@x.com', 'x', 'Student') RETURNING UserID)
+       INSERT INTO Student SELECT UserID, 'TESTID00000X1', 'CS', 2018 FROM u$q$, false);
+SELECT pg_temp.expect('C student year 2024 accepted',
+    $q$WITH u AS (INSERT INTO Users (Name, Email, PasswordHash, Role) VALUES ('T', 'ty2024@x.com', 'x', 'Student') RETURNING UserID)
+       INSERT INTO Student SELECT UserID, 'TESTID00000X2', 'CS', 2024 FROM u$q$, true);
 SELECT pg_temp.expect('C classroom capacity 0 rejected',
     $q$WITH f AS (INSERT INTO Facility (Name, FacilityType) VALUES ('Tmp', 'Classroom') RETURNING FacilityID)
        INSERT INTO Classroom (FacilityID, BuildingName, RoomNumber, Capacity) SELECT FacilityID, 'B', '1', 0 FROM f$q$, false);
+SELECT pg_temp.expect('C other capacity 0 rejected',
+    format('WITH f AS (INSERT INTO Facility (Name, FacilityType) VALUES (''TmpO'', ''Other'') RETURNING FacilityID)
+       INSERT INTO OtherFacility (FacilityID, VenueCategory, Capacity, IndoorOutdoor) SELECT FacilityID, ''Stage'', 0, ''Indoor'' FROM f'), false);
 SELECT pg_temp.expect('C holiday duplicate date rejected',
     $q$INSERT INTO Holiday (HolidayDate, Description) SELECT hol, 'dup' FROM t_dates$q$, false);
 SELECT pg_temp.expect('C delete user with bookings restricted',
-    $q$DELETE FROM Users WHERE UserID = 4$q$, false);
+    $q$DELETE FROM Users WHERE UserID = 41120212331$q$, false);
 
 -- ---------- Trigger 4 + 5: auto-reject and audit log; cancel_booking ----------
 DO $$
@@ -98,11 +143,11 @@ DECLARE
     n INT; s TEXT;
 BEGIN
     -- three pending requests: identical slot (4,5) and partially overlapping slot (6)
-    INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (4, 1, d, '14:00', '15:00') RETURNING BookingID INTO b4;
-    INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (5, 1, d, '14:00', '15:00') RETURNING BookingID INTO b5;
-    INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (6, 1, d, '14:30', '15:30') RETURNING BookingID INTO b6;
+    INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (41120212331, 2001, d, '14:00', '15:00') RETURNING BookingID INTO b4;
+    INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (41120212371, 2001, d, '14:00', '15:00') RETURNING BookingID INTO b5;
+    INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (41120212446, 2001, d, '14:30', '15:30') RETURNING BookingID INTO b6;
     -- same user, different facility, overlapping time
-    INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (4, 2, d, '14:30', '15:30') RETURNING BookingID INTO b_other;
+    INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (41120212331, 2002, d, '14:30', '15:30') RETURNING BookingID INTO b_other;
 
     PERFORM set_config('app.current_user_id', '1', true);   -- admin confirms
     UPDATE Booking SET Status = 'Confirmed' WHERE BookingID = b4;
@@ -124,25 +169,25 @@ BEGIN
     INSERT INTO t_results VALUES ('T5 auto-reject logged with acting admin', n = 1);
 
     -- cancel_booking
-    INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (5, 2, CURRENT_DATE + 5, '10:00', '11:00') RETURNING BookingID INTO b_cancel;
-    INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (5, 2, CURRENT_DATE + 5, '12:00', '13:00') RETURNING BookingID INTO b_wrong;
+    INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (41120212371, 2002, CURRENT_DATE + 5, '10:00', '11:00') RETURNING BookingID INTO b_cancel;
+    INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (41120212371, 2002, CURRENT_DATE + 5, '12:00', '13:00') RETURNING BookingID INTO b_wrong;
     PERFORM pg_temp.expect('cancel_booking by wrong user rejected',
-        format('SELECT cancel_booking(%s, 6)', b_wrong), false);
+        format('SELECT cancel_booking(%s, 41120212446)', b_wrong), false);
     PERFORM pg_temp.expect('cancel_booking by owner accepted',
-        format('SELECT cancel_booking(%s, 5)', b_cancel), true);
+        format('SELECT cancel_booking(%s, 41120212371)', b_cancel), true);
     SELECT Status::text INTO s FROM Booking WHERE BookingID = b_cancel;
     INSERT INTO t_results VALUES ('cancel_booking sets Cancelled', s = 'Cancelled');
     PERFORM pg_temp.expect('cancel_booking on Cancelled booking rejected',
-        format('SELECT cancel_booking(%s, 5)', b_cancel), false);
+        format('SELECT cancel_booking(%s, 41120212371)', b_cancel), false);
 
     -- 2-hour rule: needs a slot starting within the next 2 hours, only possible 05:00-20:00
     IF LOCALTIME BETWEEN TIME '05:00' AND TIME '20:00' THEN
         INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime)
-        VALUES (5, 2, CURRENT_DATE, (DATE_TRUNC('hour', LOCALTIMESTAMP) + INTERVAL '1 hour')::time,
+        VALUES (41120212371, 2002, CURRENT_DATE, (DATE_TRUNC('hour', LOCALTIMESTAMP) + INTERVAL '1 hour')::time,
                                     (DATE_TRUNC('hour', LOCALTIMESTAMP) + INTERVAL '2 hour')::time)
         RETURNING BookingID INTO b_wrong;
         PERFORM pg_temp.expect('cancel_booking inside 2h window rejected',
-            format('SELECT cancel_booking(%s, 5)', b_wrong), false);
+            format('SELECT cancel_booking(%s, 41120212371)', b_wrong), false);
     ELSE
         RAISE NOTICE 'SKIPPED 2-hour cancellation test (only runs between 05:00 and 20:00 server time)';
     END IF;

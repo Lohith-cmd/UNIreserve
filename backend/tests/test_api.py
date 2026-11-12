@@ -26,13 +26,13 @@ def test_booking_student_duration_exceeded():
     """
     target_date = date.today() + timedelta(days=3)
     payload = {
-        "facility_id": 1,
+        "facility_id": 2001,
         "booking_date": str(target_date),
         "start_time": "10:00:00",
         "end_time": "11:30:00",
         "purpose": "Long match",
     }
-    response = client.post("/bookings", json=payload, headers={"X-User-ID": "4"})
+    response = client.post("/bookings", json=payload, headers={"X-User-ID": "41120212331"})
     assert response.status_code == 400
     assert "Students may book at most 1 hour per booking" in response.json()["detail"]
 
@@ -43,20 +43,20 @@ def test_create_and_fetch_my_booking():
     """
     target_date = date.today() + timedelta(days=4)
     payload = {
-        "facility_id": 1,  # Sports venue
+        "facility_id": 2001,  # Sports venue
         "booking_date": str(target_date),
         "start_time": "14:00:00",
         "end_time": "15:00:00",
         "purpose": "Basketball practice",
     }
-    response = client.post("/bookings", json=payload, headers={"X-User-ID": "4"})
+    response = client.post("/bookings", json=payload, headers={"X-User-ID": "41120212331"})
     assert response.status_code == 201
     created = response.json()
     assert created["status"] == "Pending"
     booking_id = created["booking_id"]
 
     # Verify in my bookings
-    my_resp = client.get("/bookings/my", headers={"X-User-ID": "4"})
+    my_resp = client.get("/bookings/my", headers={"X-User-ID": "41120212331"})
     assert my_resp.status_code == 200
     my_bookings = my_resp.json()
     assert any(b["booking_id"] == booking_id for b in my_bookings)
@@ -68,32 +68,32 @@ def test_admin_confirm_and_reject_flow():
     """
     target_date = date.today() + timedelta(days=5)
 
-    # User 4 books slot 16:00-17:00
+    # Student 41120212331 books slot 16:00-17:00
     b1_resp = client.post(
         "/bookings",
         json={
-            "facility_id": 2,
+            "facility_id": 2002,
             "booking_date": str(target_date),
             "start_time": "16:00:00",
             "end_time": "17:00:00",
             "purpose": "Match A",
         },
-        headers={"X-User-ID": "4"},
+        headers={"X-User-ID": "41120212331"},
     )
     assert b1_resp.status_code == 201
     b1_id = b1_resp.json()["booking_id"]
 
-    # User 5 books overlapping slot 16:30-17:30
+    # Student 41120212371 books overlapping slot 16:30-17:30
     b2_resp = client.post(
         "/bookings",
         json={
-            "facility_id": 2,
+            "facility_id": 2002,
             "booking_date": str(target_date),
             "start_time": "16:30:00",
             "end_time": "17:30:00",
             "purpose": "Match B",
         },
-        headers={"X-User-ID": "5"},
+        headers={"X-User-ID": "41120212371"},
     )
     assert b2_resp.status_code == 201
     b2_id = b2_resp.json()["booking_id"]
@@ -104,7 +104,7 @@ def test_admin_confirm_and_reject_flow():
     assert confirm_resp.json()["status"] == "Confirmed"
 
     # Auto-reject trigger (trg_booking_auto_reject) must have marked booking 2 as Rejected!
-    b2_check = client.get("/bookings/my", headers={"X-User-ID": "5"})
+    b2_check = client.get("/bookings/my", headers={"X-User-ID": "41120212371"})
     b2_data = next(b for b in b2_check.json() if b["booking_id"] == b2_id)
     assert b2_data["status"] == "Rejected"
 
@@ -144,7 +144,7 @@ def test_maintenance_crud():
     create_resp = client.post(
         "/admin/maintenance",
         json={
-            "facility_id": 1,
+            "facility_id": 2001,
             "start_date": start_d,
             "end_date": end_d,
             "start_time": "08:00:00",
