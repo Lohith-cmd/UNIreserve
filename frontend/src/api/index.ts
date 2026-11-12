@@ -15,6 +15,11 @@ import type {
 
 import { cancelBlockedReason, timesOverlap } from "../utils/validation";
 
+import {
+  toBooking, toFacility, toLog, toPending, toUser,
+  type RawBooking, type RawFacility, type RawLog, type RawPending, type RawUser,
+} from "./mappers";
+
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
 
 const delay = (ms = 400) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -54,8 +59,11 @@ export async function login(email: string, password: string): Promise<LoginRespo
     if (!user) throw new Error("Invalid email or password");
     return { token: `mock-token-${user.userId}`, user };
   }
-  const res = await http.post<LoginResponse>("/auth/login", { email, password });
-  return res.data;
+    const res = await http.post<{ access_token: string; user: RawUser }>("/auth/login", {
+    email,
+    password,
+  });
+  return { token: res.data.access_token, user: toUser(res.data.user) };
 }
 
 // ---------- Facilities ----------
@@ -64,8 +72,8 @@ export async function getFacilities(): Promise<Facility[]> {
     await delay();
     return [...mockFacilities];
   }
-  const res = await http.get<Facility[]>("/facilities");
-  return res.data;
+    const res = await http.get<RawFacility[]>("/facilities");
+  return res.data.map(toFacility);
 }
 
 export async function searchAvailability(q: AvailabilityQuery): Promise<Facility[]> {
@@ -85,8 +93,15 @@ export async function searchAvailability(q: AvailabilityQuery): Promise<Facility
       return !clash;
     });
   }
-  const res = await http.get<Facility[]>("/facilities/availability", { params: q });
-  return res.data;
+    const res = await http.get<RawFacility[]>("/facilities/available", {
+    params: {
+      date: q.date,
+      start_time: q.startTime,
+      end_time: q.endTime,
+      facility_type: q.type,
+    },
+  });
+  return res.data.map(toFacility);
 }
 
 // ---------- Bookings ----------
@@ -133,8 +148,13 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
     });
     return booking;
   }
-  const res = await http.post<Booking>("/bookings", input);
-  return res.data;
+    const res = await http.post<RawBooking>("/bookings", {
+    facility_id: input.facilityId,
+    booking_date: input.bookingDate,
+    start_time: input.startTime,
+    end_time: input.endTime,
+  });
+  return toBooking(res.data);
 }
 
 export async function getMyBookings(): Promise<Booking[]> {
@@ -143,8 +163,8 @@ export async function getMyBookings(): Promise<Booking[]> {
     const user = currentMockUser();
     return mockBookings.filter((b) => b.userId === user.userId);
   }
-  const res = await http.get<Booking[]>("/bookings/me");
-  return res.data;
+    const res = await http.get<RawBooking[]>("/bookings/my");
+  return res.data.map(toBooking);
 }
 
 export async function cancelBooking(bookingId: number): Promise<void> {
@@ -170,16 +190,19 @@ export async function cancelBooking(bookingId: number): Promise<void> {
     b.status = "Cancelled";
     return;
   }
-  await http.post(`/bookings/${bookingId}/cancel`);
-}
+  await http.put(`/bookings/${bookingId}/cancel`);}
 
 export async function getBookingLog(bookingId: number): Promise<StatusLogEntry[]> {
   if (USE_MOCK) {
     await delay(200);
     return mockLogs.filter((l) => l.bookingId === bookingId);
   }
-  const res = await http.get<StatusLogEntry[]>(`/bookings/${bookingId}/log`);
-  return res.data;
+    const res = await http.get<RawLog[] | { logs?: RawLog[]; status_logs?: RawLog[] }>(
+    `/bookings/${bookingId}/logs`
+  );
+  const data = res.data;
+  const arr = Array.isArray(data) ? data : data.logs ?? data.status_logs ?? [];
+  return arr.map(toLog);
 }
 
 // ---------- Admin: approvals ----------
@@ -212,8 +235,8 @@ export async function getPendingBookings(): Promise<PendingBooking[]> {
         return { ...b, userName: u.name, userRole: u.role };
       });
   }
-  const res = await http.get<PendingBooking[]>("/admin/bookings/pending");
-  return res.data;
+    const res = await http.get<RawPending[]>("/admin/bookings/pending");
+  return res.data.map(toPending);
 }
 
 export async function confirmBooking(bookingId: number): Promise<ConfirmResult> {
@@ -246,8 +269,8 @@ export async function confirmBooking(bookingId: number): Promise<ConfirmResult> 
     clashing.forEach((x) => setStatus(x, "Rejected", admin.userId));
     return { autoRejected: clashing.length };
   }
-  const res = await http.post<ConfirmResult>(`/admin/bookings/${bookingId}/confirm`);
-  return res.data;
+    const res = await http.put<{ message?: string }>(`/admin/bookings/${bookingId}/confirm`);
+  return { message: res.data.message };
 }
 
 export async function rejectBooking(bookingId: number): Promise<void> {
@@ -260,5 +283,5 @@ export async function rejectBooking(bookingId: number): Promise<void> {
     setStatus(b, "Rejected", admin.userId);
     return;
   }
-  await http.post(`/admin/bookings/${bookingId}/reject`);
+  await http.put(`/admin/bookings/${bookingId}/reject`);
 }

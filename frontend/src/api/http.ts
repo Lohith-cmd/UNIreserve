@@ -12,4 +12,17 @@ http.interceptors.request.use((config) => {
   return config;
 });
 
+http.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    const isLogin = err.config?.url?.includes("/auth/login");
+    if (axios.isAxiosError(err) && err.response?.status === 401 && !isLogin) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/login";
+    }
+    return Promise.reject(err);
+  }
+);
+
 export default http;

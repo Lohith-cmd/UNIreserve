@@ -1,8 +1,8 @@
 export type Role = "Student" | "Faculty" | "Admin";
 
-export type BookingStatus = "Pending" | "Confirmed" | "Rejected" | "Cancelled";
+export type BookingStatus = "Pending" | "Confirmed" | "Rejected" | "Cancelled" | "Completed";
 
-export type FacilityType = "Sports" | "Classroom";
+export type FacilityType = "Sports" | "Classroom" | "Other";
 
 export type FacilityStatus = "Active" | "Under Maintenance";
 
@@ -18,6 +18,8 @@ export interface Facility {
   name: string;
   type: FacilityType;
   status: FacilityStatus;
+  location?: string | null;
+  pendingRequests?: number;
 }
 
 export interface Booking {
@@ -29,6 +31,7 @@ export interface Booking {
   startTime: string; // "HH:MM"
   endTime: string; // "HH:MM"
   status: BookingStatus;
+  purpose?: string | null;
 }
 
 export interface StatusLogEntry {
@@ -38,6 +41,7 @@ export interface StatusLogEntry {
   newStatus: BookingStatus;
   changedAt: string; // ISO timestamp
   changedBy: number | null;
+  changedByName?: string | null;
 }
 
 export interface MaintenanceWindow {
@@ -67,5 +71,5 @@ export interface PendingBooking extends Booking {
 
 export interface ConfirmResult {
   autoRejected?: number;
+  message?: string;
 }
-

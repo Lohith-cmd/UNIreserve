@@ -121,6 +121,7 @@ export default function BrowseBook() {
             <option value="">All</option>
             <option value="Sports">Sports</option>
             <option value="Classroom">Classroom</option>
+            <option value="Other">Other</option>
           </select>
         </label>
         <button type="submit" disabled={searching}>
@@ -140,7 +141,11 @@ export default function BrowseBook() {
               <div className="card facility-row" key={f.facilityId}>
                 <div>
                   <strong>{f.name}</strong>
-                  <div className="muted">{f.type}</div>
+                  <div className="muted">
+                    {f.type}
+                    {f.location ? ` · ${f.location}` : ""}
+                    {f.pendingRequests ? ` · ${f.pendingRequests} pending request(s)` : ""}
+                  </div>
                 </div>
                 <button
                   onClick={() => handleBook(f)}

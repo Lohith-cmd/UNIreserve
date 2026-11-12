@@ -37,7 +37,7 @@ export default function AdminApprovals() {
         setSuccess(
           n > 0
             ? `Confirmed. ${n} overlapping request(s) were automatically rejected.`
-            : "Confirmed."
+            : res.message ?? "Confirmed."
         );
       } else {
         await rejectBooking(b.bookingId);

@@ -62,6 +62,7 @@ export function validateDuration(
       return `Faculty may book at most ${max} hour(s) for ${facility.type.toLowerCase()} facilities`;
     }
   }
+  if (role === "Faculty" && facility.type !== "Other") {}
   return null;
 }
 

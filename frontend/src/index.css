@@ -244,3 +244,7 @@ label {
   font-size: 13px;
   margin-top: 2px;
 }
+.badge-completed {
+  background: #dbeafe;
+  color: #1e40af;
+}
