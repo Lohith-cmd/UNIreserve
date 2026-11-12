@@ -59,3 +59,13 @@ export interface LoginResponse {
   token: string;
   user: User;
 }
+
+export interface PendingBooking extends Booking {
+  userName: string;
+  userRole: Role;
+}
+
+export interface ConfirmResult {
+  autoRejected?: number;
+}
+

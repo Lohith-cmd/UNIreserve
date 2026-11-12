@@ -1,6 +1,19 @@
 import http from "./http";
-import { mockBookings, mockFacilities, mockUsers } from "./mockData";
-import type { Booking, Facility, FacilityType, LoginResponse, User } from "../types";
+import { mockBookings, mockFacilities, mockLogs, mockUsers } from "./mockData";
+
+import type {
+  Booking,
+  BookingStatus,
+  ConfirmResult,
+  Facility,
+  FacilityType,
+  LoginResponse,
+  PendingBooking,
+  StatusLogEntry,
+  User,
+} from "../types";
+
+import { cancelBlockedReason, timesOverlap } from "../utils/validation";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
 
@@ -110,6 +123,14 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
       status: "Pending",
     };
     mockBookings.push(booking);
+      mockLogs.push({
+      logId: mockLogs.length + 1,
+      bookingId: booking.bookingId,
+      oldStatus: null,
+      newStatus: "Pending",
+      changedAt: new Date().toISOString(),
+      changedBy: user.userId,
+    });
     return booking;
   }
   const res = await http.post<Booking>("/bookings", input);
@@ -129,10 +150,115 @@ export async function getMyBookings(): Promise<Booking[]> {
 export async function cancelBooking(bookingId: number): Promise<void> {
   if (USE_MOCK) {
     await delay();
+    const user = currentMockUser();
     const b = mockBookings.find((x) => x.bookingId === bookingId);
     if (!b) throw new Error("Booking not found");
+    if (b.userId !== user.userId) {
+      throw new Error("You can only cancel your own bookings");
+    }
+    const blocked = cancelBlockedReason(b);
+    if (blocked) throw new Error(blocked);
+
+    mockLogs.push({
+      logId: mockLogs.length + 1,
+      bookingId: b.bookingId,
+      oldStatus: b.status,
+      newStatus: "Cancelled",
+      changedAt: new Date().toISOString(),
+      changedBy: user.userId,
+    });
     b.status = "Cancelled";
     return;
   }
   await http.post(`/bookings/${bookingId}/cancel`);
+}
+
+export async function getBookingLog(bookingId: number): Promise<StatusLogEntry[]> {
+  if (USE_MOCK) {
+    await delay(200);
+    return mockLogs.filter((l) => l.bookingId === bookingId);
+  }
+  const res = await http.get<StatusLogEntry[]>(`/bookings/${bookingId}/log`);
+  return res.data;
+}
+
+// ---------- Admin: approvals ----------
+function requireAdmin(): User {
+  const user = currentMockUser();
+  if (user.role !== "Admin") throw new Error("Admin access required");
+  return user;
+}
+
+function setStatus(b: Booking, newStatus: BookingStatus, byUserId: number) {
+  mockLogs.push({
+    logId: mockLogs.length + 1,
+    bookingId: b.bookingId,
+    oldStatus: b.status,
+    newStatus,
+    changedAt: new Date().toISOString(),
+    changedBy: byUserId,
+  });
+  b.status = newStatus;
+}
+
+export async function getPendingBookings(): Promise<PendingBooking[]> {
+  if (USE_MOCK) {
+    await delay();
+    requireAdmin();
+    return mockBookings
+      .filter((b) => b.status === "Pending")
+      .map((b) => {
+        const u = mockUsers.find((x) => x.userId === b.userId)!;
+        return { ...b, userName: u.name, userRole: u.role };
+      });
+  }
+  const res = await http.get<PendingBooking[]>("/admin/bookings/pending");
+  return res.data;
+}
+
+export async function confirmBooking(bookingId: number): Promise<ConfirmResult> {
+  if (USE_MOCK) {
+    await delay();
+    const admin = requireAdmin();
+    const b = mockBookings.find((x) => x.bookingId === bookingId);
+    if (!b) throw new Error("Booking not found");
+    if (b.status !== "Pending") throw new Error("Only pending bookings can be confirmed");
+
+    const confirmed = mockBookings.filter(
+      (x) => x.status === "Confirmed" && x.bookingId !== b.bookingId
+    );
+    if (confirmed.some((x) => x.facilityId === b.facilityId && timesOverlap(x, b))) {
+      throw new Error("This facility already has an overlapping confirmed booking");
+    }
+    if (confirmed.some((x) => x.userId === b.userId && timesOverlap(x, b))) {
+      throw new Error("This user already has an overlapping confirmed booking");
+    }
+
+    setStatus(b, "Confirmed", admin.userId);
+
+    const clashing = mockBookings.filter(
+      (x) =>
+        x.status === "Pending" &&
+        x.bookingId !== b.bookingId &&
+        x.facilityId === b.facilityId &&
+        timesOverlap(x, b)
+    );
+    clashing.forEach((x) => setStatus(x, "Rejected", admin.userId));
+    return { autoRejected: clashing.length };
+  }
+  const res = await http.post<ConfirmResult>(`/admin/bookings/${bookingId}/confirm`);
+  return res.data;
+}
+
+export async function rejectBooking(bookingId: number): Promise<void> {
+  if (USE_MOCK) {
+    await delay();
+    const admin = requireAdmin();
+    const b = mockBookings.find((x) => x.bookingId === bookingId);
+    if (!b) throw new Error("Booking not found");
+    if (b.status !== "Pending") throw new Error("Only pending bookings can be rejected");
+    setStatus(b, "Rejected", admin.userId);
+    return;
+  }
+  await http.post(`/admin/bookings/${bookingId}/reject`);
 }
