@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "RS256"
     JWT_PRIVATE_KEY_PATH: str = "./backend/keys/private.pem"
     JWT_PUBLIC_KEY_PATH: str = "./backend/keys/public.pem"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).resolve().parent.parent.parent / ".env"),

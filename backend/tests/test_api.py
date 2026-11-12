@@ -55,11 +55,17 @@ def test_create_and_fetch_my_booking():
     assert created["status"] == "Pending"
     booking_id = created["booking_id"]
 
-    # Verify in my bookings
-    my_resp = client.get("/bookings/my", headers={"X-User-ID": "41120212331"})
-    assert my_resp.status_code == 200
-    my_bookings = my_resp.json()
-    assert any(b["booking_id"] == booking_id for b in my_bookings)
+    try:
+        # Verify in my bookings
+        my_resp = client.get("/bookings/my", headers={"X-User-ID": "41120212331"})
+        assert my_resp.status_code == 200
+        my_bookings = my_resp.json()
+        assert any(b["booking_id"] == booking_id for b in my_bookings)
+    finally:
+        from app.database import get_db_cursor
+        with get_db_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM BookingStatusLog WHERE BookingID = %s;", (booking_id,))
+            cur.execute("DELETE FROM Booking WHERE BookingID = %s;", (booking_id,))
 
 
 def test_admin_confirm_and_reject_flow():
@@ -98,15 +104,21 @@ def test_admin_confirm_and_reject_flow():
     assert b2_resp.status_code == 201
     b2_id = b2_resp.json()["booking_id"]
 
-    # Admin confirms booking 1
-    confirm_resp = client.put(f"/admin/bookings/{b1_id}/confirm", headers={"X-User-ID": "1"})
-    assert confirm_resp.status_code == 200
-    assert confirm_resp.json()["status"] == "Confirmed"
+    try:
+        # Admin confirms booking 1
+        confirm_resp = client.put(f"/admin/bookings/{b1_id}/confirm", headers={"X-User-ID": "1"})
+        assert confirm_resp.status_code == 200
+        assert confirm_resp.json()["status"] == "Confirmed"
 
-    # Auto-reject trigger (trg_booking_auto_reject) must have marked booking 2 as Rejected!
-    b2_check = client.get("/bookings/my", headers={"X-User-ID": "41120212371"})
-    b2_data = next(b for b in b2_check.json() if b["booking_id"] == b2_id)
-    assert b2_data["status"] == "Rejected"
+        # Auto-reject trigger (trg_booking_auto_reject) must have marked booking 2 as Rejected!
+        b2_check = client.get("/bookings/my", headers={"X-User-ID": "41120212371"})
+        b2_data = next(b for b in b2_check.json() if b["booking_id"] == b2_id)
+        assert b2_data["status"] == "Rejected"
+    finally:
+        from app.database import get_db_cursor
+        with get_db_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM BookingStatusLog WHERE BookingID IN (%s, %s);", (b1_id, b2_id))
+            cur.execute("DELETE FROM Booking WHERE BookingID IN (%s, %s);", (b1_id, b2_id))
 
 
 def test_admin_analytics():
