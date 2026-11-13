@@ -1,4 +1,4 @@
-import type { Booking, Facility, StatusLogEntry, User } from "../types";
+import type { Booking, Facility, Holiday, MaintenanceWindow, StatusLogEntry, User } from "../types";
 
 export function dateFromToday(offsetDays: number): string {
   const d = new Date();
@@ -67,4 +67,22 @@ export const mockLogs: StatusLogEntry[] = [
   { logId: 7, bookingId: 5, oldStatus: null, newStatus: "Pending", changedAt: ago(3), changedBy: 6 },
   { logId: 8, bookingId: 6, oldStatus: null, newStatus: "Pending", changedAt: ago(2), changedBy: 2 },
   { logId: 9, bookingId: 7, oldStatus: null, newStatus: "Pending", changedAt: ago(1), changedBy: 6 },
+];
+
+export const mockHolidays: Holiday[] = [
+  { holidayId: 1, holidayDate: dateFromToday(10), description: "Founders' Day" },
+  { holidayId: 2, holidayDate: dateFromToday(25), description: "Winter break begins" },
+];
+
+export const mockMaintenance: MaintenanceWindow[] = [
+  {
+    scheduleId: 1,
+    facilityId: 3,
+    facilityName: "Tennis Court",
+    startDate: dateFromToday(0),
+    endDate: dateFromToday(14),
+    startTime: "06:00",
+    endTime: "22:00",
+    description: "Resurfacing",
+  },
 ];
