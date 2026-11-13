@@ -1,6 +1,27 @@
-from datetime import date, time
-from typing import Optional, List, Dict, Any
+from datetime import date, datetime, time
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
+
+
+class PendingBookingResponse(BaseModel):
+    """Pending booking item shown in the Admin approval queue."""
+
+    booking_id: int
+    user_id: int  # BIGINT in DB; Python int handles 11-digit IDs
+    user_name: str
+    user_email: str
+    user_role: str
+    facility_id: int
+    facility_name: str
+    facility_location: Optional[str] = None
+    facility_type: str
+    booking_date: date
+    start_time: time
+    end_time: time
+    status: str = "Pending"
+    purpose: Optional[str] = None
+    created_at: datetime
 
 
 class HolidayCreate(BaseModel):
@@ -48,6 +69,10 @@ class FacilityWeeklyStat(BaseModel):
 
 class AnalyticsOverview(BaseModel):
     summary: List[FacilityWeeklyStat]
+    weekly_summary: List[FacilityWeeklyStat]
     status_counts: Dict[str, int]
+    status_breakdown: Dict[str, int]
+    role_breakdown: Dict[str, int]
     top_facilities: List[Dict[str, Any]]
-
+    peak_hours: List[Dict[str, Any]]
+    upcoming_availability: List[Dict[str, Any]]
