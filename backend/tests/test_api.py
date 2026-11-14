@@ -372,3 +372,61 @@ def test_available_facilities_endpoint():
             client.delete(f"/admin/maintenance/{maint_id}", headers=auth(1))
         with get_db_cursor(commit=True) as cur:
             cur.execute("UPDATE Facility SET Status = 'Active' WHERE FacilityID = 2003;")
+
+
+# ---------------------------------------------------------------------------
+# Error messages must be friendly and must not leak database internals
+# ---------------------------------------------------------------------------
+def test_off_grid_time_returns_friendly_message():
+    """A 10:15 start violates chk_booking_slot_grid; the API must not echo the failing row."""
+    payload = {
+        "facility_id": 2001,
+        "booking_date": str(date.today() + timedelta(days=3)),
+        "start_time": "10:15:00",
+        "end_time": "11:15:00",
+        "purpose": "Off-grid test",
+    }
+    response = client.post("/bookings", json=payload, headers=auth(41120212331))
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert "30-minute" in detail
+    assert "Failing row" not in detail
+    assert "41120212331" not in detail
+
+
+def test_end_before_start_returns_friendly_message():
+    payload = {
+        "facility_id": 2001,
+        "booking_date": str(date.today() + timedelta(days=3)),
+        "start_time": "11:00:00",
+        "end_time": "10:00:00",
+        "purpose": "Backwards test",
+    }
+    response = client.post("/bookings", json=payload, headers=auth(41120212331))
+    assert response.status_code in (400, 422)
+    assert "Failing row" not in response.text
+
+
+# ---------------------------------------------------------------------------
+# Seed data: Auditorium / Open Amphitheatre are 'Other', not 'Classroom'
+# ---------------------------------------------------------------------------
+def test_auditorium_and_amphitheatre_are_other_facilities():
+    facilities = {f["facility_id"]: f for f in client.get("/facilities").json()}
+    assert facilities[3001]["facility_type"] == "Other"
+    assert facilities[3002]["facility_type"] == "Other"
+
+
+def test_other_facilities_available_on_weekday_daytime():
+    """The weekday-evening-only classroom rule must not hide Other facilities."""
+    d = date.today() + timedelta(days=2)
+    while d.weekday() > 4:  # move to a weekday
+        d += timedelta(days=1)
+    resp = client.get(
+        "/facilities/available",
+        params={"date": str(d), "start_time": "10:00:00", "end_time": "11:00:00"},
+    )
+    assert resp.status_code == 200
+    ids = {f["facility_id"] for f in resp.json()}
+    assert 3001 in ids and 3002 in ids
+    # ordinary classrooms are still hidden at that time
+    assert 1001 not in ids
