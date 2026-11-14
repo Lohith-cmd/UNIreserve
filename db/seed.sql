@@ -8509,8 +8509,8 @@ INSERT INTO Facility (FacilityID, Name, Location, FacilityType, Status) VALUES
   (2012, 'Pool Table 1', 'SAC', 'Sports', 'Active'),
   (2013, 'Pool Table 2', 'SAC', 'Sports', 'Active'),
   (2014, 'Pool Table 3', 'SAC', 'Sports', 'Active'),
-  (3001, 'Auditorium', 'AB', 'Classroom', 'Active'),
-  (3002, 'Open Amphitheatre', 'AB', 'Classroom', 'Active');
+  (3001, 'Auditorium', 'AB', 'Other', 'Active'),
+  (3002, 'Open Amphitheatre', 'AB', 'Other', 'Active');
 
 INSERT INTO Classroom (FacilityID, BuildingName, RoomNumber, Capacity, HasProjector, HasAC, RoomType) VALUES
   (1001, 'F Block', 'F101', 200, TRUE, TRUE, 'Lecture Hall'),
@@ -8668,9 +8668,7 @@ INSERT INTO Classroom (FacilityID, BuildingName, RoomNumber, Capacity, HasProjec
   (1153, 'D Block', 'D212', 60, TRUE, TRUE, 'EG Lab'),
   (1154, 'D Block', 'D311', 60, TRUE, TRUE, 'CS Lab'),
   (1155, 'D Block', 'D312', 60, TRUE, TRUE, 'CS Lab'),
-  (1156, 'D Block', 'D313', 60, TRUE, TRUE, 'CS Lab'),
-  (3001, 'Academic Block', 'AUD-1', 1000, TRUE, TRUE, 'Auditorium'),
-  (3002, 'Academic Block', 'AMP-1', 1500, FALSE, FALSE, 'Amphitheatre');
+  (1156, 'D Block', 'D313', 60, TRUE, TRUE, 'CS Lab');
 
 INSERT INTO SportsVenue (FacilityID, VenueType, Surface, IndoorOutdoor) VALUES
   (2001, 'Tennis', 'Synthetic', 'Outdoor'),
@@ -8687,6 +8685,10 @@ INSERT INTO SportsVenue (FacilityID, VenueType, Surface, IndoorOutdoor) VALUES
   (2012, 'Pool', 'Felt', 'Indoor'),
   (2013, 'Pool', 'Felt', 'Indoor'),
   (2014, 'Pool', 'Felt', 'Indoor');
+
+INSERT INTO OtherFacility (FacilityID, VenueCategory, Capacity, HasProjector, HasAC, IndoorOutdoor) VALUES
+  (3001, 'Auditorium', 1000, TRUE, TRUE, 'Indoor'),
+  (3002, 'Amphitheatre', 1500, FALSE, FALSE, 'Outdoor');
 
 SELECT setval(pg_get_serial_sequence('Facility', 'facilityid'), (SELECT MAX(FacilityID) FROM Facility));
 

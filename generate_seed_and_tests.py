@@ -147,10 +147,11 @@ faculty_list = [
     (104,'EMP103', 'Prof. Biswanath Dash',              'biswanath@hyderabad.bits-pilani.ac.in',         '04066303622', 'HSS',   'Associate Professor'),
 ]
 
-# 4. Facilities (4-digit FacilityIDs: Classrooms 1001..1156, Sports 2001..2014, Auditorium/Amphitheatre 3001..3002)
+# 4. Facilities (4-digit FacilityIDs: Classrooms 1001..1156, Sports 2001..2014, Other 3001..3002)
 facilities = []
 classrooms = []
 sports_venues = []
+other_facilities = []
 
 fac_id = 1001
 
@@ -243,10 +244,11 @@ for sid, sname, sloc, vtype, surf, inout in sports_data:
     sports_venues.append((sid, vtype, surf, inout))
 
 # Other Facilities: 3001..3002 (Auditorium & Open Amphitheatre in AB)
-facilities.append((3001, "Auditorium",        "AB", "Classroom", "Active"))
-classrooms.append((3001, "Academic Block", "AUD-1", 1000, "TRUE",  "TRUE",  "Auditorium"))
-facilities.append((3002, "Open Amphitheatre", "AB", "Classroom", "Active"))
-classrooms.append((3002, "Academic Block", "AMP-1", 1500, "FALSE", "FALSE", "Amphitheatre"))
+# Stored with FacilityType 'Other' (not Classroom) so the weekday-evening classroom rule does not apply.
+facilities.append((3001, "Auditorium",        "AB", "Other", "Active"))
+other_facilities.append((3001, "Auditorium",   1000, "TRUE",  "TRUE",  "Indoor"))
+facilities.append((3002, "Open Amphitheatre", "AB", "Other", "Active"))
+other_facilities.append((3002, "Amphitheatre", 1500, "FALSE", "FALSE", "Outdoor"))
 
 # 5. Holidays from BITS Academic Calendar 2026-27
 holidays = [
@@ -321,6 +323,7 @@ for row in df_filtered.itertuples():
 fac_rows_sql   = [f"  ({fid}, '{nm}', '{loc}', '{ft}', '{st}')" for fid, nm, loc, ft, st in facilities]
 class_rows_sql = [f"  ({fid}, '{blk}', '{rm}', {cap}, {proj}, {ac}, '{rt}')" for fid, blk, rm, cap, proj, ac, rt in classrooms]
 sport_rows_sql = [f"  ({fid}, '{vt}', '{sf}', '{io}')" for fid, vt, sf, io in sports_venues]
+other_rows_sql = [f"  ({fid}, '{cat}', {cap}, {proj}, {ac}, '{io}')" for fid, cat, cap, proj, ac, io in other_facilities]
 hol_rows_sql   = [f"  ('{dt}', '{desc}')" for dt, desc in holidays]
 maint_rows_sql = [f"  ({fid}, '{sd}', '{ed}', '{st}', '{et}', '{desc}')" for fid, sd, ed, st, et, desc in maint_rows]
 
@@ -364,7 +367,7 @@ INSERT INTO Student (UserID, BITS_ID, Department, Year) VALUES
 
 SELECT setval(pg_get_serial_sequence('Users', 'userid'), (SELECT MAX(UserID) FROM Users));
 
--- 4. Facilities (Classrooms 1001..1156, Sports 2001..2014, Auditorium/Amphitheatre 3001..3002)
+-- 4. Facilities (Classrooms 1001..1156, Sports 2001..2014, Other 3001..3002)
 INSERT INTO Facility (FacilityID, Name, Location, FacilityType, Status) VALUES
 {",\n".join(fac_rows_sql)};
 
@@ -373,6 +376,9 @@ INSERT INTO Classroom (FacilityID, BuildingName, RoomNumber, Capacity, HasProjec
 
 INSERT INTO SportsVenue (FacilityID, VenueType, Surface, IndoorOutdoor) VALUES
 {",\n".join(sport_rows_sql)};
+
+INSERT INTO OtherFacility (FacilityID, VenueCategory, Capacity, HasProjector, HasAC, IndoorOutdoor) VALUES
+{",\n".join(other_rows_sql)};
 
 SELECT setval(pg_get_serial_sequence('Facility', 'facilityid'), (SELECT MAX(FacilityID) FROM Facility));
 

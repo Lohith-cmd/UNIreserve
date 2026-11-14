@@ -12,11 +12,13 @@ Middleware:
 
 Exception handlers:
   - psycopg2.errors.RaiseException (SQLSTATE P0001) → HTTP 400 with trigger message.
-  - psycopg2.errors.UniqueViolation                 → HTTP 409.
-  - psycopg2.errors.CheckViolation                  → HTTP 400.
-  - Any other psycopg2.Error                        → HTTP 500.
+  - psycopg2.errors.UniqueViolation                 → HTTP 409, friendly message.
+  - psycopg2.errors.CheckViolation                  → HTTP 400, friendly message.
+  - Any other psycopg2.Error                        → HTTP 500, generic message (details logged).
+  Constraint errors never include the failing row or key value.
 """
 
+import logging
 from contextlib import asynccontextmanager
 
 import psycopg2
@@ -74,6 +76,25 @@ app.add_middleware(
 # Global PostgreSQL exception handlers
 # ---------------------------------------------------------------------------
 
+logger = logging.getLogger("unireserve")
+
+# Friendly messages keyed by constraint name (see db/schema.sql).
+CHECK_MESSAGES = {
+    "chk_booking_slot_grid": "Booking times must be on 30-minute marks, for example 10:00 or 10:30.",
+    "chk_booking_time_order": "End time must be after the start time.",
+    "chk_maint_dates": "The end date must be on or after the start date.",
+    "classroom_capacity_check": "Capacity must be greater than zero.",
+    "otherfacility_capacity_check": "Capacity must be greater than zero.",
+    "student_year_check": "Year is outside the allowed range.",
+}
+UNIQUE_MESSAGES = {
+    "users_email_key": "Email already registered",
+    "student_bits_id_key": "BITS ID already registered",
+    "faculty_employeeid_key": "Employee ID already registered",
+    "holiday_holidaydate_key": "A holiday already exists on that date.",
+}
+
+
 @app.exception_handler(psycopg2.Error)
 async def postgres_exception_handler(request: Request, exc: psycopg2.Error):
     """
@@ -92,32 +113,39 @@ async def postgres_exception_handler(request: Request, exc: psycopg2.Error):
             content={"detail": message},
         )
 
+    # Constraint violations: never echo Postgres's message_detail, which contains the
+    # failing row ("Failing row contains (...)") or the offending key value.
+    constraint = (exc.diag.constraint_name if exc.diag else None) or ""
+
     if isinstance(exc, errors.UniqueViolation):
-        message = (
-            (exc.diag.message_detail if exc.diag else None)
-            or (exc.diag.message_primary if exc.diag else None)
-            or "A record with this value already exists."
-        )
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={"detail": message},
+            content={"detail": UNIQUE_MESSAGES.get(constraint, "A record with this value already exists.")},
         )
 
-    if isinstance(exc, (errors.CheckViolation, errors.ForeignKeyViolation, errors.NotNullViolation)):
-        message = (
-            (exc.diag.message_detail if exc.diag else None)
-            or (exc.diag.message_primary if exc.diag else None)
-            or "Input violated a database constraint."
-        )
+    if isinstance(exc, errors.CheckViolation):
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={"detail": message},
+            content={"detail": CHECK_MESSAGES.get(constraint, "The submitted values are not allowed.")},
         )
 
-    # Catch-all
+    if isinstance(exc, errors.ForeignKeyViolation):
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"detail": "This item refers to something that does not exist, or is still in use by other records."},
+        )
+
+    if isinstance(exc, errors.NotNullViolation):
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"detail": "A required field is missing."},
+        )
+
+    # Catch-all: log the details server-side, return nothing internal to the client.
+    logger.exception("Unhandled database error on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "Database error occurred", "error": str(exc)},
+        content={"detail": "Database error occurred"},
     )
 
 
