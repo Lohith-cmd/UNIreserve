@@ -175,3 +175,37 @@ def test_admin_route_secured_with_jwt():
     )
     assert forbidden_resp.status_code == 403
     assert "Admin privileges required" in forbidden_resp.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Regression tests: the old X-User-ID / default-user bypass must stay closed
+# ---------------------------------------------------------------------------
+def test_no_credentials_rejected():
+    assert client.get("/bookings/my").status_code == 401
+    assert client.get("/admin/analytics").status_code == 401
+    assert client.get("/auth/me").status_code == 401
+
+
+def test_x_user_id_header_no_longer_grants_access():
+    """Anyone sending X-User-ID: 1 used to be treated as the admin."""
+    resp = client.get("/admin/analytics", headers={"X-User-ID": "1"})
+    assert resp.status_code == 401
+    resp = client.get("/bookings/my", headers={"X-User-ID": "41120212331"})
+    assert resp.status_code == 401
+
+
+def test_garbage_and_tampered_tokens_rejected():
+    assert client.get("/bookings/my", headers={"Authorization": "Bearer not.a.token"}).status_code == 401
+    assert client.get("/bookings/my", headers={"Authorization": "Basic abc"}).status_code == 401
+    from tests.helpers import auth
+    good = auth(41120212331)["Authorization"]
+    tampered = good[:-4] + ("AAAA" if not good.endswith("AAAA") else "BBBB")
+    assert client.get("/bookings/my", headers={"Authorization": tampered}).status_code == 401
+
+
+def test_expired_token_rejected():
+    from datetime import timedelta
+    from app.auth_utils import create_access_token
+    token = create_access_token({"sub": "41120212331"}, expires_delta=timedelta(minutes=-5))
+    resp = client.get("/bookings/my", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 401
