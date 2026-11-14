@@ -2,6 +2,7 @@ import pytest
 from datetime import date, timedelta
 from fastapi.testclient import TestClient
 from app.main import app
+from tests.helpers import auth
 
 client = TestClient(app)
 
@@ -32,7 +33,7 @@ def test_booking_student_duration_exceeded():
         "end_time": "11:30:00",
         "purpose": "Long match",
     }
-    response = client.post("/bookings", json=payload, headers={"X-User-ID": "41120212331"})
+    response = client.post("/bookings", json=payload, headers=auth(41120212331))
     assert response.status_code == 400
     assert "Students may book at most 1 hour per booking" in response.json()["detail"]
 
@@ -49,7 +50,7 @@ def test_create_and_fetch_my_booking():
         "end_time": "15:00:00",
         "purpose": "Basketball practice",
     }
-    response = client.post("/bookings", json=payload, headers={"X-User-ID": "41120212331"})
+    response = client.post("/bookings", json=payload, headers=auth(41120212331))
     assert response.status_code == 201
     created = response.json()
     assert created["status"] == "Pending"
@@ -57,7 +58,7 @@ def test_create_and_fetch_my_booking():
 
     try:
         # Verify in my bookings
-        my_resp = client.get("/bookings/my", headers={"X-User-ID": "41120212331"})
+        my_resp = client.get("/bookings/my", headers=auth(41120212331))
         assert my_resp.status_code == 200
         my_bookings = my_resp.json()
         assert any(b["booking_id"] == booking_id for b in my_bookings)
@@ -84,7 +85,7 @@ def test_admin_confirm_and_reject_flow():
             "end_time": "17:00:00",
             "purpose": "Match A",
         },
-        headers={"X-User-ID": "41120212331"},
+        headers=auth(41120212331),
     )
     assert b1_resp.status_code == 201
     b1_id = b1_resp.json()["booking_id"]
@@ -99,19 +100,19 @@ def test_admin_confirm_and_reject_flow():
             "end_time": "17:30:00",
             "purpose": "Match B",
         },
-        headers={"X-User-ID": "41120212371"},
+        headers=auth(41120212371),
     )
     assert b2_resp.status_code == 201
     b2_id = b2_resp.json()["booking_id"]
 
     try:
         # Admin confirms booking 1
-        confirm_resp = client.put(f"/admin/bookings/{b1_id}/confirm", headers={"X-User-ID": "1"})
+        confirm_resp = client.put(f"/admin/bookings/{b1_id}/confirm", headers=auth(1))
         assert confirm_resp.status_code == 200
         assert confirm_resp.json()["status"] == "Confirmed"
 
         # Auto-reject trigger (trg_booking_auto_reject) must have marked booking 2 as Rejected!
-        b2_check = client.get("/bookings/my", headers={"X-User-ID": "41120212371"})
+        b2_check = client.get("/bookings/my", headers=auth(41120212371))
         b2_data = next(b for b in b2_check.json() if b["booking_id"] == b2_id)
         assert b2_data["status"] == "Rejected"
     finally:
@@ -122,7 +123,7 @@ def test_admin_confirm_and_reject_flow():
 
 
 def test_admin_analytics():
-    response = client.get("/admin/analytics", headers={"X-User-ID": "1"})
+    response = client.get("/admin/analytics", headers=auth(1))
     assert response.status_code == 200
     data = response.json()
     assert "summary" in data
@@ -142,17 +143,17 @@ def test_holidays_crud():
     create_resp = client.post(
         "/admin/holidays",
         json={"holiday_date": holiday_date, "description": "Test Campus Holiday"},
-        headers={"X-User-ID": "1"},
+        headers=auth(1),
     )
     assert create_resp.status_code == 201
     h_id = create_resp.json()["holiday_id"]
 
     # List
-    list_resp = client.get("/admin/holidays", headers={"X-User-ID": "1"})
+    list_resp = client.get("/admin/holidays", headers=auth(1))
     assert any(h["holiday_id"] == h_id for h in list_resp.json())
 
     # Delete
-    del_resp = client.delete(f"/admin/holidays/{h_id}", headers={"X-User-ID": "1"})
+    del_resp = client.delete(f"/admin/holidays/{h_id}", headers=auth(1))
     assert del_resp.status_code == 204
 
 
@@ -169,13 +170,13 @@ def test_maintenance_crud():
             "end_time": "12:00:00",
             "description": "Floor resurfacing",
         },
-        headers={"X-User-ID": "1"},
+        headers=auth(1),
     )
     assert create_resp.status_code == 201
     m_id = create_resp.json()["schedule_id"]
 
     # Delete
-    del_resp = client.delete(f"/admin/maintenance/{m_id}", headers={"X-User-ID": "1"})
+    del_resp = client.delete(f"/admin/maintenance/{m_id}", headers=auth(1))
     assert del_resp.status_code == 204
 
 
@@ -196,7 +197,7 @@ def test_cancel_booking_success_and_ownership():
             "end_time": "11:00:00",
             "purpose": "Cancel ownership test",
         },
-        headers={"X-User-ID": "41120212331"},
+        headers=auth(41120212331),
     )
     assert create_resp.status_code == 201
     booking_id = create_resp.json()["booking_id"]
@@ -205,7 +206,7 @@ def test_cancel_booking_success_and_ownership():
         # Wrong user attempts cancellation -> 400
         wrong_resp = client.put(
             f"/bookings/{booking_id}/cancel",
-            headers={"X-User-ID": "41120212371"},
+            headers=auth(41120212371),
         )
         assert wrong_resp.status_code == 400
         assert "does not belong to user" in wrong_resp.json()["detail"]
@@ -213,7 +214,7 @@ def test_cancel_booking_success_and_ownership():
         # Owner cancels -> 200 & Status == 'Cancelled'
         cancel_resp = client.put(
             f"/bookings/{booking_id}/cancel",
-            headers={"X-User-ID": "41120212331"},
+            headers=auth(41120212331),
         )
         assert cancel_resp.status_code == 200
         cancel_data = cancel_resp.json()
@@ -223,7 +224,7 @@ def test_cancel_booking_success_and_ownership():
         # Verify BookingStatusLog via /bookings/{id}/logs and /bookings/my
         logs_resp = client.get(
             f"/bookings/{booking_id}/logs",
-            headers={"X-User-ID": "41120212331"},
+            headers=auth(41120212331),
         )
         assert logs_resp.status_code == 200
         logs = logs_resp.json()
@@ -232,7 +233,7 @@ def test_cancel_booking_success_and_ownership():
             for entry in logs
         )
 
-        my_resp = client.get("/bookings/my", headers={"X-User-ID": "41120212331"})
+        my_resp = client.get("/bookings/my", headers=auth(41120212331))
         assert my_resp.status_code == 200
         my_booking = next(b for b in my_resp.json() if b["booking_id"] == booking_id)
         assert my_booking["status"] == "Cancelled"
@@ -265,7 +266,7 @@ def test_auto_reject_overlapping_pending_bookings():
             "end_time": "11:00:00",
             "purpose": "Overlap slot 1",
         },
-        headers={"X-User-ID": "41120212331"},
+        headers=auth(41120212331),
     )
     assert b1_resp.status_code == 201
     b1_id = b1_resp.json()["booking_id"]
@@ -279,14 +280,14 @@ def test_auto_reject_overlapping_pending_bookings():
             "end_time": "11:30:00",
             "purpose": "Overlap slot 2",
         },
-        headers={"X-User-ID": "41120212371"},
+        headers=auth(41120212371),
     )
     assert b2_resp.status_code == 201
     b2_id = b2_resp.json()["booking_id"]
 
     try:
         # Confirm both appear in admin pending queue
-        pending_resp = client.get("/admin/bookings/pending", headers={"X-User-ID": "1"})
+        pending_resp = client.get("/admin/bookings/pending", headers=auth(1))
         assert pending_resp.status_code == 200
         pending_ids = {item["booking_id"] for item in pending_resp.json()}
         assert b1_id in pending_ids and b2_id in pending_ids
@@ -294,13 +295,13 @@ def test_auto_reject_overlapping_pending_bookings():
         # Admin confirms booking 1
         confirm_resp = client.put(
             f"/admin/bookings/{b1_id}/confirm",
-            headers={"X-User-ID": "1"},
+            headers=auth(1),
         )
         assert confirm_resp.status_code == 200
         assert confirm_resp.json()["status"] == "Confirmed"
 
         # Verify booking 2 was auto-rejected
-        b2_my = client.get("/bookings/my", headers={"X-User-ID": "41120212371"})
+        b2_my = client.get("/bookings/my", headers=auth(41120212371))
         assert b2_my.status_code == 200
         b2_data = next(b for b in b2_my.json() if b["booking_id"] == b2_id)
         assert b2_data["status"] == "Rejected"
@@ -346,7 +347,7 @@ def test_available_facilities_endpoint():
                 "end_time": "20:00:00",
                 "description": "Availability exclusion test",
             },
-            headers={"X-User-ID": "1"},
+            headers=auth(1),
         )
         assert m_resp.status_code == 201
         maint_id = m_resp.json()["schedule_id"]
@@ -368,6 +369,6 @@ def test_available_facilities_endpoint():
         assert 2002 not in avail_ids  # Overlaps MaintenanceSchedule
     finally:
         if maint_id is not None:
-            client.delete(f"/admin/maintenance/{maint_id}", headers={"X-User-ID": "1"})
+            client.delete(f"/admin/maintenance/{maint_id}", headers=auth(1))
         with get_db_cursor(commit=True) as cur:
             cur.execute("UPDATE Facility SET Status = 'Active' WHERE FacilityID = 2003;")

@@ -6,36 +6,35 @@ from app.database import get_db_cursor
 
 def get_current_user_id(
     authorization: Optional[str] = Header(None, alias="Authorization"),
-    x_user_id: Optional[int] = Header(None, alias="X-User-ID"),
 ) -> int:
     """
-    Retrieves the current user ID.
-    1. Checks 'Authorization: Bearer <token>' header and validates RS256 JWT.
-    2. Falls back to 'X-User-ID' header for backwards-compatible test runs.
-    3. Falls back to default student ID (41120212331) in dev mode.
+    Returns the authenticated user's ID from a valid 'Authorization: Bearer <token>'
+    RS256 JWT. A missing, malformed, expired or tampered token is rejected with 401;
+    there is no header or default-user fallback.
     """
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization[7:].strip()
-        payload = decode_access_token(token)
-        sub = payload.get("sub")
-        if not sub:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token missing subject identifier",
-            )
-        try:
-            return int(sub)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid user ID in token subject",
-            )
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-    if x_user_id is not None:
-        return x_user_id
-
-    # Default to student test user (UserID 41120212331) if not supplied in dev mode
-    return 41120212331
+    payload = decode_access_token(authorization[7:].strip())
+    sub = payload.get("sub")
+    if not sub:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token missing subject identifier",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    try:
+        return int(sub)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user ID in token subject",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 def get_current_user(user_id: int = Depends(get_current_user_id)) -> dict:
@@ -80,7 +79,7 @@ def get_current_user(user_id: int = Depends(get_current_user_id)) -> dict:
 def require_admin_user(user_id: int = Depends(get_current_user_id)) -> int:
     """
     Ensures the user has the 'Admin' role in the Users table.
-    Supports both JWT Bearer authorization and X-User-ID header.
+    The user comes from the verified JWT; the role is always re-read from the database.
     """
     with get_db_cursor(commit=False) as cur:
         cur.execute("SELECT Role FROM Users WHERE UserID = %s;", (user_id,))
