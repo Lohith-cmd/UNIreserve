@@ -21,10 +21,10 @@ Set these in `frontend/.env`. This file is git-ignored; `.env.example` is the te
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `VITE_USE_MOCK` | `true` | `true` uses the built-in fake API, `false` calls the real backend |
+| `VITE_USE_MOCK` | `false` (in `.env.example`) | `false` calls the real backend, `true` uses the built-in fake API |
 | `VITE_API_URL` | `http://localhost:8000` | Base URL of the FastAPI backend |
 
-## Mock mode (default)
+## Mock mode (set `VITE_USE_MOCK=true`)
 
 With `VITE_USE_MOCK=true` no backend or database is needed. The app runs on in-memory sample data that resets on page refresh. The mock also enforces the main booking rules, so errors look like the real ones.
 

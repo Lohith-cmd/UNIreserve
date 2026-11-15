@@ -299,8 +299,8 @@ bookings = [
     (20, stu_ids[12], 2009, "2026-11-01", "16:00", "17:00", "Confirmed", "Badminton doubles practice",         905),
     (21, stu_ids[13], 2006, "2026-11-02", "18:00", "19:00", "Confirmed", "TT ladder match",                    909),
     (22, 85,          1070, "2026-11-03", "18:00", "20:00", "Confirmed", "Mathematics Olympiad training",      904),
-    (23, stu_ids[14], 2013, "2026-11-04", "19:00", "20:00", "Pending",   "Evening pool practice",              stu_ids[14]),
-    (24, stu_ids[15], 1148, "2026-11-05", "18:00", "19:00", "Pending",   "Competitive programming practice",   stu_ids[15]),
+    (23, stu_ids[14], 2013, "2026-11-04", "19:00", "20:00", "Rejected",  "Evening pool practice",              905),
+    (24, stu_ids[15], 1148, "2026-11-05", "18:00", "19:00", "Rejected",  "Competitive programming practice",   905),
     (25, 94,          1095, "2026-11-05", "18:30", "20:30", "Confirmed", "Quantum physics tutorial",           904),
 ]
 
