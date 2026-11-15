@@ -8740,8 +8740,8 @@ INSERT INTO Booking (BookingID, UserID, FacilityID, BookingDate, StartTime, EndT
   (20, 41120220994, 2009, '2026-11-01', '16:00', '17:00', 'Confirmed', 'Badminton doubles practice'),
   (21, 41120221010, 2006, '2026-11-02', '18:00', '19:00', 'Confirmed', 'TT ladder match'),
   (22, 85, 1070, '2026-11-03', '18:00', '20:00', 'Confirmed', 'Mathematics Olympiad training'),
-  (23, 41120221014, 2013, '2026-11-04', '19:00', '20:00', 'Pending', 'Evening pool practice'),
-  (24, 41120221020, 1148, '2026-11-05', '18:00', '19:00', 'Pending', 'Competitive programming practice'),
+  (23, 41120221014, 2013, '2026-11-04', '19:00', '20:00', 'Rejected', 'Evening pool practice'),
+  (24, 41120221020, 1148, '2026-11-05', '18:00', '19:00', 'Rejected', 'Competitive programming practice'),
   (25, 94, 1095, '2026-11-05', '18:30', '20:30', 'Confirmed', 'Quantum physics tutorial');
 
 INSERT INTO BookingStatusLog (BookingID, OldStatus, NewStatus, ChangedByUserID) VALUES
@@ -8805,7 +8805,9 @@ INSERT INTO BookingStatusLog (BookingID, OldStatus, NewStatus, ChangedByUserID) 
   (22, NULL, 'Pending', 85),
   (22, 'Pending', 'Confirmed', 904),
   (23, NULL, 'Pending', 41120221014),
+  (23, 'Pending', 'Rejected', 905),
   (24, NULL, 'Pending', 41120221020),
+  (24, 'Pending', 'Rejected', 905),
   (25, NULL, 'Pending', 94),
   (25, 'Pending', 'Confirmed', 904);
 
