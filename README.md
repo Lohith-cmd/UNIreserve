@@ -11,7 +11,7 @@ Stack: PostgreSQL 16, FastAPI (Python 3.12), React 18 + Vite + TypeScript, Docke
 ```
 db/schema.sql       tables, constraints, indexes, views
 db/procedures.sql   check_classroom_availability, has_maintenance_conflict, cancel_booking
-db/triggers.sql     5 triggers (see below)
+db/triggers.sql     6 trigger functions (see below)
 db/seed.sql         sample data
 backend/            FastAPI app (not started)
 frontend/           React app (not started)
@@ -50,6 +50,8 @@ Get-Content db/tests.sql -Raw | docker compose exec -T db psql -U unireserve -d 
   4. `trg_booking_auto_reject` (AFTER UPDATE): on Confirm, rejects overlapping Pending bookings and
      blocks the confirm if the user (or facility) already has an overlapping Confirmed booking
   5. `trg_booking_audit_log` (AFTER INSERT/UPDATE): writes BookingStatusLog
+  6. `trg_maintenance_cancel_bookings` / `trg_facility_maintenance_cancel`: a new maintenance window (or a facility set
+     to `Under Maintenance`) cancels overlapping Confirmed bookings and rejects overlapping Pending ones (rows are kept, logged)
 - Auto-reject uses time overlap (stricter than the exact-slot match in the midsem report).
 - Audit log actor comes from `set_config('app.current_user_id', ...)`, set by the backend per transaction.
 
