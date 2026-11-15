@@ -99,3 +99,26 @@ export function timesOverlap(a: Booking, b: Booking): boolean {
   );
 }
 
+export function formatDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export function findMyConflict(
+  mine: Booking[],
+  facilityId: number,
+  date: string,
+  start: string,
+  end: string
+): Booking | undefined {
+  return mine.find(
+    (b) =>
+      (b.status === "Pending" || b.status === "Confirmed") &&
+      b.facilityId === facilityId &&
+      b.bookingDate === date &&
+      toMinutes(start) < toMinutes(b.endTime) &&
+      toMinutes(end) > toMinutes(b.startTime)
+  );
+}

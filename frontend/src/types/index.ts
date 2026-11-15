@@ -32,6 +32,7 @@ export interface Booking {
   endTime: string; // "HH:MM"
   status: BookingStatus;
   purpose?: string | null;
+  createdAt?: string;
 }
 
 export interface StatusLogEntry {
@@ -45,18 +46,20 @@ export interface StatusLogEntry {
 }
 
 export interface MaintenanceWindow {
-  maintenanceId: number;
+  scheduleId: number;
   facilityId: number;
   facilityName: string;
   startDate: string;
   endDate: string;
-  reason: string;
+  startTime: string;
+  endTime: string;
+  description: string | null;
 }
 
 export interface Holiday {
   holidayId: number;
   holidayDate: string;
-  description: string;
+  description: string | null;
 }
 
 export interface LoginResponse {
@@ -65,6 +68,7 @@ export interface LoginResponse {
 }
 
 export interface PendingBooking extends Booking {
+  createdAt: string;
   userName: string;
   userRole: Role;
 }
@@ -72,4 +76,29 @@ export interface PendingBooking extends Booking {
 export interface ConfirmResult {
   autoRejected?: number;
   message?: string;
+}
+
+export interface WeeklyStat {
+  facilityId: number;
+  facilityName: string;
+  weekStart: string;
+  totalRequests: number;
+  confirmed: number;
+  pending: number;
+  rejected: number;
+  cancelled: number;
+  bookedHours: number;
+}
+
+export interface RankedItem {
+  label: string;
+  count: number;
+}
+
+export interface Analytics {
+  statusCounts: Record<string, number>;
+  roleBreakdown: Record<string, number>;
+  topFacilities: RankedItem[];
+  peakHours: RankedItem[];
+  weekly: WeeklyStat[];
 }

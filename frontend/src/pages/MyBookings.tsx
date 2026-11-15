@@ -4,6 +4,7 @@ import { getErrorMessage } from "../api/errors";
 import StatusBadge from "../components/StatusBadge";
 import { cancelBlockedReason, isUpcoming, startsAt } from "../utils/validation";
 import type { Booking, StatusLogEntry } from "../types";
+import { formatDateTime, parseServerDate } from "../utils/format";
 
 type Tab = "upcoming" | "history";
 
@@ -69,7 +70,9 @@ export default function MyBookings() {
     setOpenLogId(id);
     if (!logs[id]) {
       try {
-        const entries = await getBookingLog(id);
+        const entries = (await getBookingLog(id)).sort(
+          (a, b) => parseServerDate(a.changedAt).getTime() - parseServerDate(b.changedAt).getTime()
+        );
         setLogs((prev) => ({ ...prev, [id]: entries }));
       } catch (err) {
         setError(getErrorMessage(err));
@@ -151,7 +154,8 @@ export default function MyBookings() {
                           <StatusBadge status={l.newStatus} />
                           <span className="muted">
                             {l.oldStatus ? `from ${l.oldStatus} · ` : "created · "}
-                            {new Date(l.changedAt).toLocaleString()}
+                            {formatDateTime(l.changedAt)}
+                            {l.changedByName ? ` · by ${l.changedByName}` : ""}
                           </span>
                         </li>
                       ))
