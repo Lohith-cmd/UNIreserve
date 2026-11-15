@@ -128,7 +128,7 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
       input.startTime,
       input.endTime
     );
-    
+
     if (dup) {
       throw new Error(
         `You already have a ${dup.status.toLowerCase()} request for this facility and time`
@@ -152,6 +152,7 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
       startTime: input.startTime,
       endTime: input.endTime,
       status: "Pending",
+      createdAt: new Date().toISOString(),
     };
     mockBookings.push(booking);
       mockLogs.push({
@@ -248,7 +249,10 @@ export async function getPendingBookings(): Promise<PendingBooking[]> {
       .filter((b) => b.status === "Pending")
       .map((b) => {
         const u = mockUsers.find((x) => x.userId === b.userId)!;
-        return { ...b, userName: u.name, userRole: u.role };
+        const created =
+          mockLogs.find((l) => l.bookingId === b.bookingId && l.oldStatus === null)?.changedAt ??
+          new Date().toISOString();
+        return { ...b, createdAt: created, userName: u.name, userRole: u.role };
       });
   }
     const res = await http.get<RawPending[]>("/admin/bookings/pending");

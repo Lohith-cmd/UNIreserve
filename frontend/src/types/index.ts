@@ -32,6 +32,7 @@ export interface Booking {
   endTime: string; // "HH:MM"
   status: BookingStatus;
   purpose?: string | null;
+  createdAt?: string;
 }
 
 export interface StatusLogEntry {
@@ -67,6 +68,7 @@ export interface LoginResponse {
 }
 
 export interface PendingBooking extends Booking {
+  createdAt: string;
   userName: string;
   userRole: Role;
 }

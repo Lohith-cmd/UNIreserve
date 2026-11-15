@@ -344,3 +344,59 @@ label {
   gap: 10px;
   font-size: 14px;
 }
+.clickable {
+  cursor: pointer;
+}
+.stat.clickable:hover {
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+.stat.active {
+  outline: 2px solid #00277c;
+}
+.bar-row {
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+.bar-row.clickable:hover {
+  background: #f3f4f6;
+}
+.bar-row.selected {
+  background: #dbeafe;
+}
+.filter-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.chip {
+  background: #dbeafe;
+  color: #00277c;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.data-table th.hl,
+.data-table td.hl {
+  background: #eff6ff;
+  font-weight: 600;
+}
+.req-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rank {
+  background: #00277c;
+  color: white;
+  border-radius: 6px;
+  padding: 1px 7px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.ok {
+  color: #166534;
+  font-size: 13px;
+  margin-top: 2px;
+}

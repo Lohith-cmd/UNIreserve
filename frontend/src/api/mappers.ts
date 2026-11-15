@@ -54,6 +54,7 @@ export interface RawBooking {
   purpose: string | null;
   status_logs?: RawLog[];
   logs?: RawLog[];
+  created_at?: string;
 }
 
 export interface RawPending extends RawBooking {
@@ -99,11 +100,17 @@ export function toBooking(r: RawBooking): Booking {
     endTime: hhmm(r.end_time),
     status: r.status as BookingStatus,
     purpose: r.purpose,
+    createdAt: r.created_at,
   };
 }
 
 export function toPending(r: RawPending): PendingBooking {
-  return { ...toBooking(r), userName: r.user_name, userRole: r.user_role as Role };
+  return {
+    ...toBooking(r),
+    createdAt: r.created_at ?? "",
+    userName: r.user_name,
+    userRole: r.user_role as Role,
+  };
 }
 
 export interface RawHoliday {
