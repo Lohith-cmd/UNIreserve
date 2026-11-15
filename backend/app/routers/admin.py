@@ -380,7 +380,7 @@ def create_maintenance(payload: MaintenanceCreate, admin_id: int = Depends(requi
             detail="Maintenance end_time must be after start_time",
         )
 
-    with get_db_cursor(commit=True) as cur:
+    with get_db_cursor(commit=True, user_id=admin_id) as cur:
         cur.execute("SELECT Name FROM Facility WHERE FacilityID = %s;", (payload.facility_id,))
         fac = cur.fetchone()
         if not fac:

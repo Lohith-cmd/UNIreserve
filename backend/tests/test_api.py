@@ -474,3 +474,33 @@ def test_pending_queue_lists_same_slot_requests_in_arrival_order():
         with get_db_cursor(commit=True) as cur:
             cur.execute("DELETE FROM BookingStatusLog WHERE BookingID = ANY(%s);", (ids,))
             cur.execute("DELETE FROM Booking WHERE BookingID = ANY(%s);", (ids,))
+
+
+def test_new_maintenance_cancels_existing_bookings_and_logs_admin():
+    """A maintenance window created after a booking was confirmed must cancel it (kept, not deleted)."""
+    from app.database import get_db_cursor
+    d = date.today() + timedelta(days=5)
+    r = client.post("/bookings", headers=auth(41120212331), json={
+        "facility_id": 2013, "booking_date": str(d), "start_time": "10:00:00",
+        "end_time": "11:00:00", "purpose": "will be cancelled by maintenance"})
+    assert r.status_code == 201
+    bid = r.json()["booking_id"]
+    maint_id = None
+    try:
+        assert client.put(f"/admin/bookings/{bid}/confirm", headers=auth(1)).status_code == 200
+        m = client.post("/admin/maintenance", headers=auth(1), json={
+            "facility_id": 2013, "start_date": str(d), "end_date": str(d),
+            "start_time": "09:00:00", "end_time": "12:00:00", "description": "api test window"})
+        assert m.status_code == 201
+        maint_id = m.json()["schedule_id"]
+        mine = client.get("/bookings/my", headers=auth(41120212331)).json()
+        assert [b["status"] for b in mine if b["booking_id"] == bid] == ["Cancelled"]
+        with get_db_cursor(commit=False) as cur:
+            cur.execute("SELECT ChangedByUserID FROM BookingStatusLog WHERE BookingID=%s AND NewStatus='Cancelled';", (bid,))
+            assert cur.fetchone()["changedbyuserid"] == 1
+    finally:
+        if maint_id:
+            client.delete(f"/admin/maintenance/{maint_id}", headers=auth(1))
+        with get_db_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM BookingStatusLog WHERE BookingID = %s;", (bid,))
+            cur.execute("DELETE FROM Booking WHERE BookingID = %s;", (bid,))

@@ -193,6 +193,43 @@ BEGIN
     END IF;
 END $$;
 
+-- ---------- Maintenance cancels existing bookings ----------
+DO $$
+DECLARE
+    d DATE := CURRENT_DATE + 3;
+    bc INT; bp INT; bout INT; bfac INT; bfac2 INT; mid INT; s TEXT; n INT;
+BEGIN
+    PERFORM set_config('app.current_user_id', '1', true);
+    INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (41120212331, 2011, d, '10:00', '11:00') RETURNING BookingID INTO bc;
+    INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (41120212371, 2011, d, '10:30', '11:30') RETURNING BookingID INTO bp;
+    INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (41120212446, 2011, d, '15:00', '16:00') RETURNING BookingID INTO bout;
+    UPDATE Booking SET Status = 'Confirmed' WHERE BookingID = bc;   -- bp auto-rejected here; re-open it as Pending
+    UPDATE Booking SET Status = 'Pending'   WHERE BookingID = bp;
+
+    INSERT INTO MaintenanceSchedule (FacilityID, StartDate, EndDate, StartTime, EndTime, Description)
+    VALUES (2011, d, d, '10:00', '12:00', 'T6 test') RETURNING ScheduleID INTO mid;
+
+    SELECT Status::text INTO s FROM Booking WHERE BookingID = bc;
+    INSERT INTO t_results VALUES ('T6 maintenance cancels confirmed booking in window', s = 'Cancelled');
+    SELECT Status::text INTO s FROM Booking WHERE BookingID = bp;
+    INSERT INTO t_results VALUES ('T6 maintenance rejects pending booking in window', s = 'Rejected');
+    SELECT Status::text INTO s FROM Booking WHERE BookingID = bout;
+    INSERT INTO t_results VALUES ('T6 booking outside window untouched', s = 'Pending');
+    SELECT COUNT(*) INTO n FROM BookingStatusLog
+     WHERE BookingID = bc AND OldStatus = 'Confirmed' AND NewStatus = 'Cancelled' AND ChangedByUserID = 1;
+    INSERT INTO t_results VALUES ('T6 cancellation logged with acting admin', n = 1);
+
+    -- facility status change cancels everything upcoming
+    INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (41120212331, 2012, d, '09:00', '10:00') RETURNING BookingID INTO bfac;
+    UPDATE Booking SET Status = 'Confirmed' WHERE BookingID = bfac;
+    INSERT INTO Booking (UserID, FacilityID, BookingDate, StartTime, EndTime) VALUES (41120212371, 2012, d, '12:00', '13:00') RETURNING BookingID INTO bfac2;
+    UPDATE Facility SET Status = 'Under Maintenance' WHERE FacilityID = 2012;
+    SELECT Status::text INTO s FROM Booking WHERE BookingID = bfac;
+    INSERT INTO t_results VALUES ('T6 facility Under Maintenance cancels confirmed booking', s = 'Cancelled');
+    SELECT Status::text INTO s FROM Booking WHERE BookingID = bfac2;
+    INSERT INTO t_results VALUES ('T6 facility Under Maintenance rejects pending booking', s = 'Rejected');
+END $$;
+
 -- ---------- Views ----------
 SELECT pg_temp.expect('view facility_availability_view queryable', 'SELECT * FROM facility_availability_view', true);
 SELECT pg_temp.expect('view booking_summary_view queryable',       'SELECT * FROM booking_summary_view', true);
