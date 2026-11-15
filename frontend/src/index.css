@@ -5,7 +5,7 @@
 body {
   margin: 0;
   font-family: system-ui, sans-serif;
-  background: #f5f6fa;
+  background: #cdd5ef;
   color: #1f2937;
 }
 
@@ -160,7 +160,7 @@ label {
 .tab.active {
   background: #00277c;
   color: white;
-  border-color: #00277c;
+  border-color: #2563eb;
 }
 .secondary {
   background: #6b7280;
@@ -246,7 +246,7 @@ label {
 }
 .badge-completed {
   background: #dbeafe;
-  color: #1e40af;
+  color: #2563eb;
 }
 
 .stat-grid {
@@ -302,7 +302,7 @@ label {
 }
 .bar-count {
   text-align: right;
-  color: #6b7280;
+  color: #2563eb;
 }
 .table-wrap {
   max-height: 360px;
@@ -337,4 +337,10 @@ label {
   align-items: center;
   padding: 10px 0;
   border-bottom: 1px solid #e5e7eb;
+}
+.existing-request {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
 }

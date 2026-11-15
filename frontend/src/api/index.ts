@@ -14,7 +14,7 @@ import type {
   Analytics, Holiday, MaintenanceWindow, RankedItem, WeeklyStat
 } from "../types";
 
-import { cancelBlockedReason, timesOverlap,formatDate } from "../utils/validation";
+import { cancelBlockedReason, findMyConflict, formatDate, timesOverlap } from "../utils/validation";
 
 import {
   toBooking, toFacility, toLog, toPending, toUser,
@@ -120,6 +120,20 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
 
     if (end <= start) throw new Error("End time must be after start time");
     if (start % 30 !== 0 || end % 30 !== 0) throw new Error("Bookings must use 30-minute slots");
+
+    const dup = findMyConflict(
+      mockBookings.filter((b) => b.userId === user.userId),
+      facility.facilityId,
+      input.bookingDate,
+      input.startTime,
+      input.endTime
+    );
+    
+    if (dup) {
+      throw new Error(
+        `You already have a ${dup.status.toLowerCase()} request for this facility and time`
+      );
+    }
 
     if (user.role === "Student" && hours > 1) {
       throw new Error("Students may book at most 1 hour per booking");

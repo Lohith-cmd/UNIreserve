@@ -1,9 +1,15 @@
 import { useState, type FormEvent } from "react";
-import { createBooking, searchAvailability } from "../api";
+import { createBooking, getMyBookings, searchAvailability } from "../api";
 import { getErrorMessage } from "../api/errors";
 import { useAuth } from "../context/useAuth";
-import { todayStr, validateDuration, validateSlot } from "../utils/validation";
-import type { Facility, FacilityType } from "../types";
+import StatusBadge from "../components/StatusBadge";
+import {
+  findMyConflict,
+  todayStr,
+  validateDuration,
+  validateSlot,
+} from "../utils/validation";
+import type { Booking, Facility, FacilityType } from "../types";
 
 export default function BrowseBook() {
   const { user } = useAuth();
@@ -15,6 +21,7 @@ export default function BrowseBook() {
   const [type, setType] = useState<FacilityType | "">("");
 
   const [results, setResults] = useState<Facility[] | null>(null);
+  const [mine, setMine] = useState<Booking[]>([]);
   const [searching, setSearching] = useState(false);
   const [bookingId, setBookingId] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -33,13 +40,12 @@ export default function BrowseBook() {
 
     setSearching(true);
     try {
-      const found = await searchAvailability({
-        date,
-        startTime,
-        endTime,
-        type: type || undefined,
-      });
+      const [found, myBookings] = await Promise.all([
+        searchAvailability({ date, startTime, endTime, type: type || undefined }),
+        getMyBookings(),
+      ]);
       setResults(found);
+      setMine(myBookings);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -59,6 +65,14 @@ export default function BrowseBook() {
       return;
     }
 
+    const existing = findMyConflict(mine, facility.facilityId, date, startTime, endTime);
+    if (existing) {
+      setError(
+        `You already have a ${existing.status.toLowerCase()} request for ${facility.name} at this time.`
+      );
+      return;
+    }
+
     setBookingId(facility.facilityId);
     try {
       await createBooking({
@@ -70,6 +84,7 @@ export default function BrowseBook() {
       setSuccess(
         `Request sent for ${facility.name} on ${date}, ${startTime}-${endTime}. It is pending admin approval.`
       );
+      setMine(await getMyBookings()); // flips this row to "Pending" right away
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -137,24 +152,47 @@ export default function BrowseBook() {
           {results.length === 0 ? (
             <p className="muted">No facilities available for that slot.</p>
           ) : (
-            results.map((f) => (
-              <div className="card facility-row" key={f.facilityId}>
-                <div>
-                  <strong>{f.name}</strong>
-                  <div className="muted">
-                    {f.type}
-                    {f.location ? ` · ${f.location}` : ""}
-                    {f.pendingRequests ? ` · ${f.pendingRequests} pending request(s)` : ""}
+            results.map((f) => {
+              const existing = findMyConflict(
+                mine,
+                f.facilityId,
+                date,
+                startTime,
+                endTime
+              );
+              return (
+                <div className="card facility-row" key={f.facilityId}>
+                  <div>
+                    <strong>{f.name}</strong>
+                    <div className="muted">
+                      {f.type}
+                      {f.location ? ` · ${f.location}` : ""}
+                      {f.pendingRequests
+                        ? ` · ${f.pendingRequests} pending request(s)`
+                        : ""}
+                    </div>
                   </div>
+
+                  {existing ? (
+                    <div className="existing-request">
+                      <StatusBadge status={existing.status} />
+                      <span className="muted">
+                        {existing.status === "Pending"
+                          ? "You've already requested this slot"
+                          : "You already have this slot booked"}
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleBook(f)}
+                      disabled={bookingId !== null}
+                    >
+                      {bookingId === f.facilityId ? "Requesting..." : "Request booking"}
+                    </button>
+                  )}
                 </div>
-                <button
-                  onClick={() => handleBook(f)}
-                  disabled={bookingId !== null}
-                >
-                  {bookingId === f.facilityId ? "Requesting..." : "Request booking"}
-                </button>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       )}
