@@ -46,7 +46,8 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 def list_pending_bookings(admin_id: int = Depends(require_admin_user)):
     """
     Returns all pending bookings awaiting administrative approval, joined with
-    Users and Facility details, ordered by BookingDate ASC, StartTime ASC.
+    Users and Facility details, ordered by BookingDate, StartTime, FacilityID and then first-come-first-served
+    (CreatedAt, BookingID) so competing requests for one slot appear in arrival order.
     """
     with get_db_cursor(commit=False) as cur:
         cur.execute(
@@ -58,7 +59,7 @@ def list_pending_bookings(admin_id: int = Depends(require_admin_user)):
             JOIN Users u ON u.UserID = b.UserID
             JOIN Facility f ON f.FacilityID = b.FacilityID
             WHERE b.Status = 'Pending'
-            ORDER BY b.BookingDate ASC, b.StartTime ASC;
+            ORDER BY b.BookingDate ASC, b.StartTime ASC, b.FacilityID ASC, b.CreatedAt ASC, b.BookingID ASC;
             """
         )
         return [

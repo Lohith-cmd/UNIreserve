@@ -432,6 +432,50 @@ def test_other_facilities_available_on_weekday_daytime():
     assert 1001 not in ids
 
 
+def test_timestamps_carry_campus_offset_and_db_runs_on_campus_time():
+    """created_at / changed_at must be tagged +05:30 so browsers show the right local time."""
+    from app.database import get_db_cursor
+    with get_db_cursor(commit=False) as cur:
+        cur.execute("SELECT current_setting('TimeZone') AS tz;")
+        assert cur.fetchone()["tz"] == "Asia/Kolkata"
+    d = date.today() + timedelta(days=4)
+    r = client.post("/bookings", headers=auth(41120212331), json={
+        "facility_id": 2014, "booking_date": str(d), "start_time": "08:00:00",
+        "end_time": "09:00:00", "purpose": "timezone check"})
+    assert r.status_code == 201
+    bid = r.json()["booking_id"]
+    try:
+        assert r.json()["created_at"].endswith("+05:30")
+        logs = client.get(f"/bookings/{bid}/logs", headers=auth(41120212331)).json()
+        assert logs and logs[0]["changed_at"].endswith("+05:30")
+    finally:
+        from app.database import get_db_cursor as g
+        with g(commit=True) as cur:
+            cur.execute("DELETE FROM BookingStatusLog WHERE BookingID = %s;", (bid,))
+            cur.execute("DELETE FROM Booking WHERE BookingID = %s;", (bid,))
+
+
+def test_pending_queue_lists_same_slot_requests_in_arrival_order():
+    from app.database import get_db_cursor
+    d = date.today() + timedelta(days=3)
+    users = [41120212446, 41120212331, 41120212371]   # deliberately not sorted by id
+    ids = []
+    try:
+        for u in users:
+            r = client.post("/bookings", headers=auth(u), json={
+                "facility_id": 2014, "booking_date": str(d), "start_time": "10:00:00",
+                "end_time": "11:00:00", "purpose": "queue order"})
+            assert r.status_code == 201
+            ids.append(r.json()["booking_id"])
+        queue = client.get("/admin/bookings/pending", headers=auth(1)).json()
+        ours = [b["booking_id"] for b in queue if b["booking_id"] in ids]
+        assert ours == ids
+    finally:
+        with get_db_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM BookingStatusLog WHERE BookingID = ANY(%s);", (ids,))
+            cur.execute("DELETE FROM Booking WHERE BookingID = ANY(%s);", (ids,))
+
+
 def test_new_maintenance_cancels_existing_bookings_and_logs_admin():
     """A maintenance window created after a booking was confirmed must cancel it (kept, not deleted)."""
     from app.database import get_db_cursor

@@ -3,6 +3,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from app.schemas.campus_time import CampusDateTime
+
 
 class PendingBookingResponse(BaseModel):
     """Pending booking item shown in the Admin approval queue."""
@@ -21,7 +23,7 @@ class PendingBookingResponse(BaseModel):
     end_time: time
     status: str = "Pending"
     purpose: Optional[str] = None
-    created_at: datetime
+    created_at: CampusDateTime
 
 
 class HolidayCreate(BaseModel):
