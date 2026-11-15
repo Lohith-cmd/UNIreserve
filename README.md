@@ -23,16 +23,6 @@ conflicts without user-side waitlists.
 | 4 | Gowtham Sai Muppidi | 2024AAPS0207H |
 | 5 | Aniya Pramod Mulay | 2024AAPS2027H |
 
-### Individual contributions
-
-| Member | Contribution |
-|---|---|
-| Lohith Reddy Thumburu | Relational schema and integrity constraints; `OtherFacility` subtype and BIGINT user IDs; seed-data generator and full seed; facilities/bookings/admin API routers and test suite |
-| Aditya Maheshwari | Assumptions and normalization; triggers, stored functions, indexes and SQL test script; Docker setup; security fix (auth bypass); friendly API errors; maintenance-cancels-bookings trigger; campus-time (IST) fix and first-come ordering |
-| Sambhav Jain | ER/EER diagram and relational schema |
-| Gowtham Sai Muppidi | Application design and tech stack; RS256 JWT authentication, registration and role dependencies; bookings and admin approval routes; backend Docker image |
-| Aniya Pramod Mulay | Application design; React frontend (booking, my bookings, admin approvals, analytics, manage pages) |
-
 ## Technology stack
 
 | Layer | Technology |
