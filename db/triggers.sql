@@ -10,6 +10,8 @@ DROP TRIGGER IF EXISTS trg_booking_classroom_availability ON Booking;
 DROP TRIGGER IF EXISTS trg_booking_advance_window         ON Booking;
 DROP TRIGGER IF EXISTS trg_booking_auto_reject            ON Booking;
 DROP TRIGGER IF EXISTS trg_booking_audit_log              ON Booking;
+DROP TRIGGER IF EXISTS trg_maintenance_cancel_bookings    ON MaintenanceSchedule;
+DROP TRIGGER IF EXISTS trg_facility_maintenance_cancel     ON Facility;
 
 -- ===============================================================
 -- 1. BEFORE INSERT: duration limits
@@ -184,3 +186,49 @@ $$;
 CREATE TRIGGER trg_booking_audit_log
 AFTER INSERT OR UPDATE OF Status ON Booking
 FOR EACH ROW EXECUTE FUNCTION fn_booking_audit_log();
+
+
+-- ===============================================================
+-- 6. AFTER INSERT / UPDATE on MaintenanceSchedule, AFTER UPDATE OF Status on Facility:
+--    existing bookings that fall inside new maintenance must not stay valid.
+--    Confirmed -> Cancelled, Pending -> Rejected (rows are kept for the audit trail;
+--    trg_booking_audit_log writes the log rows, with the acting admin if set).
+--    Only future slots are touched (today's slots only if they have not ended).
+-- ===============================================================
+CREATE OR REPLACE FUNCTION fn_maintenance_cancel_bookings() RETURNS TRIGGER
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_facility INT;
+    v_from DATE;  v_to DATE;  v_start TIME;  v_end TIME;
+BEGIN
+    IF TG_TABLE_NAME = 'maintenanceschedule' THEN
+        v_facility := NEW.FacilityID;
+        v_from := NEW.StartDate;  v_to := NEW.EndDate;
+        v_start := NEW.StartTime; v_end := NEW.EndTime;
+    ELSE   -- Facility just became Under Maintenance: whole facility, all future dates
+        v_facility := NEW.FacilityID;
+        v_from := CURRENT_DATE;   v_to := DATE '9999-12-31';
+        v_start := TIME '00:00';  v_end := TIME '23:59:59';
+    END IF;
+
+    UPDATE Booking
+       SET Status = CASE Status WHEN 'Confirmed' THEN 'Cancelled'::booking_status
+                                ELSE 'Rejected'::booking_status END
+     WHERE FacilityID = v_facility
+       AND Status IN ('Pending', 'Confirmed')
+       AND BookingDate BETWEEN v_from AND v_to
+       AND StartTime < v_end AND EndTime > v_start
+       AND (BookingDate > CURRENT_DATE OR (BookingDate = CURRENT_DATE AND EndTime > LOCALTIME));
+    RETURN NULL;
+END;
+$$;
+
+CREATE TRIGGER trg_maintenance_cancel_bookings
+AFTER INSERT OR UPDATE ON MaintenanceSchedule
+FOR EACH ROW EXECUTE FUNCTION fn_maintenance_cancel_bookings();
+
+CREATE TRIGGER trg_facility_maintenance_cancel
+AFTER UPDATE OF Status ON Facility
+FOR EACH ROW
+WHEN (NEW.Status = 'Under Maintenance' AND OLD.Status IS DISTINCT FROM 'Under Maintenance')
+EXECUTE FUNCTION fn_maintenance_cancel_bookings();
