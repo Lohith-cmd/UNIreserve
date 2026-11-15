@@ -3,6 +3,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from app.schemas.campus_time import CampusDateTime
+
 
 class StatusLogEntry(BaseModel):
     """Audit trail entry for a booking status change.
@@ -17,7 +19,7 @@ class StatusLogEntry(BaseModel):
     new_status: str
     changed_by_user_id: Optional[int] = None  # BIGINT in DB; Python int is unbounded
     changed_by_name: Optional[str] = None
-    changed_at: datetime
+    changed_at: CampusDateTime
 
 
 class BookingCreate(BaseModel):
@@ -46,7 +48,7 @@ class BookingResponse(BaseModel):
     end_time: time
     status: str
     purpose: Optional[str] = None
-    created_at: datetime
+    created_at: CampusDateTime
     logs: List[StatusLogEntry] = Field(default_factory=list)
     status_logs: List[StatusLogEntry] = Field(default_factory=list)
 
@@ -64,4 +66,4 @@ class BookingActionResponse(BaseModel):
     start_time: Optional[time] = None
     end_time: Optional[time] = None
     purpose: Optional[str] = None
-    created_at: Optional[datetime] = None
+    created_at: Optional[CampusDateTime] = None

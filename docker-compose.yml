@@ -1,6 +1,8 @@
 services:
   db:
     image: postgres:16
+    # Campus clock: CURRENT_TIMESTAMP / LOCALTIME drive booking rules (already started, 2-hour cancel)
+    command: ["postgres", "-c", "timezone=Asia/Kolkata"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-unireserve}
       POSTGRES_USER: ${POSTGRES_USER:-unireserve}
