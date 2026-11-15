@@ -2,7 +2,7 @@
 
 **CS F212 Database Systems course project, Group 8, BITS Pilani Hyderabad Campus**
 
-Final submission commit: `<FINAL_COMMIT_HASH>` (git tag `final`)
+Final submitted code commit: `a09dbf29271dbf0117de16c84f554777fe1088e5` (git tag `final`; the tag sits on the documentation-only commit that records this hash, so the code is identical)
 
 ## Description
 
